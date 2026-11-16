@@ -186,7 +186,9 @@ def test_only_host_can_choose_two_active_finalists_for_round3():
     final, _ = t.start_round3(tour, "p0", ["p0", "p1"], now=100)
     assert final["status"] == "round3"
     assert final["round3"]["finalists"] == ["p0", "p1"]
-    assert final["round3"]["ends_at"] == 100 + 180
+    assert final["round3"]["story_started_at"] == 100
+    assert final["round3"]["starts_at"] is None
+    assert final["round3"]["ends_at"] is None
 
 
 def test_opponent_of_is_symmetric():

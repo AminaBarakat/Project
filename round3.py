@@ -13,6 +13,7 @@ import random
 ROUND_SECONDS = 180
 RESULTS_SECONDS = 15
 MAX_GUESSES = 3
+STORY_CHARACTERS_PER_SECOND = 22
 
 SUSPECTS = ("Nova", "Theo", "Mira")
 ROOMS = ("Library", "Observatory", "Conservatory")
@@ -29,13 +30,20 @@ CLUES = (
 
 SOLUTION = {"suspect": "Nova", "room": "Conservatory", "object": "Map"}
 FINAL_CODE = "318"
+STORY = (
+    "Detective, the earlier games were security tests inside the mansion.\n\n"
+    "During the final blackout, someone stole the Star Key.\n\n"
+    "Find the thief, the hiding place, and the final vault code."
+)
+FINAL_QUESTION = "…Who do you think is the culprit?"
 
 
 def new_round(finalists, now):
     """Create the shared Round 3 state for exactly two finalist ids."""
     return {
-        "started_at": now,
-        "ends_at": now + ROUND_SECONDS,
+        "story_started_at": now,
+        "starts_at": None,
+        "ends_at": None,
         "finalists": list(finalists),
         "guesses": {pid: [] for pid in finalists},
         "winner": None,
@@ -49,11 +57,40 @@ def is_finalist(tour, player_id):
 
 
 def seconds_left(tour, now):
-    return max(0, int(tour["round3"]["ends_at"] - now + 0.999))
+    ends_at = tour["round3"]["ends_at"]
+    return 0 if ends_at is None else max(0, int(ends_at - now + 0.999))
+
+
+def story_text(tour, now):
+    """The portion of the detective's briefing visible at this moment."""
+    started = tour["round3"]["story_started_at"]
+    characters = int(max(0, now - started) * STORY_CHARACTERS_PER_SECOND)
+    return STORY[:characters]
+
+
+def story_finished(tour, now):
+    return len(story_text(tour, now)) >= len(STORY)
 
 
 def guesses_left(tour, player_id):
     return max(0, MAX_GUESSES - len(tour["round3"]["guesses"].get(player_id, [])))
+
+
+def start_investigation(tour, player_id, now):
+    """A finalist starts the shared countdown after the briefing is complete."""
+    if tour.get("status") != "round3":
+        return tour, "The final mystery is not open right now."
+    if not is_finalist(tour, player_id):
+        return tour, "Only a finalist can open the final case."
+    if not story_finished(tour, now):
+        return tour, "Listen to the detective's briefing first."
+    if tour["round3"]["starts_at"] is not None:
+        return tour, "The investigation has already begun."
+
+    new = copy.deepcopy(tour)
+    new["round3"]["starts_at"] = now
+    new["round3"]["ends_at"] = now + ROUND_SECONDS
+    return new, "The final investigation has begun!"
 
 
 def answer(tour, player_id, suspect, room, object_name, now):
@@ -62,6 +99,10 @@ def answer(tour, player_id, suspect, room, object_name, now):
         return tour, "The final mystery is not open right now."
     if not is_finalist(tour, player_id):
         return tour, "Only the two finalists can submit a theory."
+    # Tournaments already in Round 3 before this story intro was added do not
+    # have starts_at; let those older games continue normally.
+    if "starts_at" in tour["round3"] and tour["round3"]["starts_at"] is None:
+        return tour, "The detective's briefing is still playing."
     if now >= tour["round3"]["ends_at"]:
         return tour, "Time's up!"
     if suspect not in SUSPECTS or room not in ROOMS or object_name not in OBJECTS:
@@ -89,7 +130,7 @@ def settle(tour, now, rng=None):
 
     new = copy.deepcopy(tour)
     state = new["round3"]
-    if new["status"] == "round3" and now >= state["ends_at"]:
+    if new["status"] == "round3" and state["ends_at"] is not None and now >= state["ends_at"]:
         winner, how = _winner_at_timeout(state, rng)
         _record_winner(new, winner, how, state["ends_at"])
     elif new["status"] == "round3_results" and now >= state["results_at"] + RESULTS_SECONDS:
