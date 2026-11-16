@@ -174,6 +174,21 @@ def test_cannot_start_twice():
     assert_refused(copy.deepcopy(tour), t.start(tour, "p0"))
 
 
+def test_only_host_can_choose_two_active_finalists_for_round3():
+    tour = lobby_with(4)
+    tour["status"] = "round2"
+    tour["eliminated"] = ["p2", "p3"]
+    before = copy.deepcopy(tour)
+    assert_refused(before, t.start_round3(tour, "p1", ["p0", "p1"], now=100))
+    assert_refused(before, t.start_round3(tour, "p0", ["p0", "p2"], now=100))
+    assert_refused(before, t.start_round3(tour, "p0", ["p0"], now=100))
+
+    final, _ = t.start_round3(tour, "p0", ["p0", "p1"], now=100)
+    assert final["status"] == "round3"
+    assert final["round3"]["finalists"] == ["p0", "p1"]
+    assert final["round3"]["ends_at"] == 100 + 180
+
+
 def test_opponent_of_is_symmetric():
     tour, _ = t.start(lobby_with(8), "p0", random.Random(1))
     for i in range(8):

@@ -45,7 +45,9 @@ uv run pytest
 | `round1.py` | Round 1 rules: the four challenges, the 3-minute timer, tie-breakers, results |
 | `screens/round1.py` | Round 1 on each phone: intro, board, waiting room, tie-breaker, results |
 | `screens/duels.py` | The list of duels (shown in the Round 1 intro) |
-| `screens/round2.py` | Placeholder showing who's still in |
+| `round3.py` | Round 3 rules: the final mansion mystery, theories, timer, and winner |
+| `screens/round2.py` | Round 2 placeholder and temporary host bridge to the finale |
+| `screens/round3.py` | Round 3 on each phone: clues, theory form, and final code reveal |
 | `screens/common.py` | Shared bits: title, how a player is shown (avatar slot), messages |
 | `tests/` | Tests for the rules and the storage |
 

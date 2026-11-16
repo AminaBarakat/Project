@@ -27,6 +27,7 @@ import random
 import time
 
 import round1
+import round3
 
 MAX_PLAYERS = 8
 MAX_NAME_LENGTH = 20
@@ -58,6 +59,7 @@ def new_tournament(code, host_id, host_name):
         "duels": [],
         "eliminated": [],
         "round1": None,
+        "round3": None,
     }
     return tournament, f"Tournament {code} created. Share the code with your friends!"
 
@@ -163,3 +165,26 @@ def opponent_of(tournament, player_id):
         return None
     other = duel[1] if duel[0] == player_id else duel[0]
     return find_player(tournament, other)
+
+
+def start_round3(tournament, by_id, finalist_ids, now=None):
+    """The host picks Round 2's two survivors and begins the final mystery.
+
+    Round 2 is currently a presentation placeholder, so this is a temporary
+    bridge until its Duo Vault rules decide the finalists automatically.
+    """
+    if not is_host(tournament, by_id):
+        return tournament, "Only the host can start the final mystery."
+    if tournament["status"] != "round2":
+        return tournament, "Round 3 can only start after Round 2."
+    if not isinstance(finalist_ids, list) or len(finalist_ids) != 2 or len(set(finalist_ids)) != 2:
+        return tournament, "Choose exactly two different finalists."
+    active_ids = {player["id"] for player in tournament["players"]
+                  if player["id"] not in tournament.get("eliminated", [])}
+    if not set(finalist_ids).issubset(active_ids):
+        return tournament, "Both finalists must still be in the game."
+
+    new = copy.deepcopy(tournament)
+    new["status"] = "round3"
+    new["round3"] = round3.new_round(finalist_ids, time.time() if now is None else now)
+    return new, "The final mansion mystery has begun!"
