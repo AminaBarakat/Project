@@ -19,6 +19,7 @@ from screens import round2 as round2_screen
 from screens import round3 as round3_screen
 
 st.set_page_config(page_title=common.TITLE, page_icon="🗝️", layout="centered")
+common.apply_theme()
 
 # On a laptop, storage.py uses the local SQLite file.  On Streamlit Community
 # Cloud, these two values are added in the app's Secrets settings so every

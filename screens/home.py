@@ -8,8 +8,9 @@ from screens import common
 
 
 def show():
-    st.title(f"🗝️ {common.TITLE}")
-    st.write("Eight guests. One mansion. Only one will solve the last clue.")
+    common.show_wordmark()
+    st.markdown("<div class='mm-tagline'>EIGHT GUESTS · ONE MANSION · ONE LAST CLUE</div>", unsafe_allow_html=True)
+    st.divider()
 
     create_tab, join_tab = st.tabs(["Create a tournament", "Join with a code"])
     with create_tab:
