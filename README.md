@@ -42,8 +42,8 @@ uv run pytest
 | `storage.py` | Saves tournaments: SQLite while developing locally, Supabase after deployment |
 | `screens/home.py` | Create a tournament / join with a code |
 | `screens/lobby.py` | The waiting room. Refreshes every 2 seconds |
-| `round1.py` | Round 1 rules: the four challenges, the 3-minute timer, tie-breakers, results |
-| `screens/round1.py` | Round 1 on each phone: intro, board, waiting room, tie-breaker, results |
+| `round1.py` | Round 1 rules: the four games, the random draw of games, the 60-second timer, tie-breakers, results |
+| `screens/round1.py` | Round 1 on each phone: intro, the duel's game, waiting room, tie-breaker, results |
 | `screens/duels.py` | The list of duels (shown in the Round 1 intro) |
 | `screens/round2.py` | Placeholder showing who's still in |
 | `screens/common.py` | Shared bits: title, how a player is shown (avatar slot), messages |
@@ -54,8 +54,9 @@ uv run pytest
 - **Shared state.** Each phone runs its own copy of the screens, so the tournament can't live in one phone's memory. Locally it lives in `data/game.db`. On the deployed app it lives in Supabase, so every phone reaches the same tournament.
 - **Live updates.** The lobby re-reads the database every 2 seconds (`st.fragment(run_every="2s")`), so new players appear on everyone's screen within a couple of seconds.
 - **Simultaneous actions.** Updates happen one at a time (`BEGIN IMMEDIATE` in `storage.update`). If two people grab the last seat at once, the first one saved gets it and the other is told the tournament is full. `tests/test_storage.py` checks this with 12 people joining at the same moment.
-- **Round 1 timing.** When the host starts, Round 1 begins 5 seconds later and lasts 3 minutes. No phone is "in charge" of the clock: every phone calls `round1.settle()` each second, which applies whatever is due (closing boards when time is up, deciding duels, starting a 30-second tie-breaker on equal scores, showing results, moving on to Round 2 after 8 seconds). Running it twice changes nothing, so it doesn't matter which phone gets there first.
-- **Ties.** Equal scores → one tie-breaker question. If exactly one player is right, they win. If both are right or both wrong, the faster answer wins. If nobody answers in 30 seconds, it's a random draw.
+- **Round 1.** Each of the 4 duels gets a different game, drawn at random (Number Lock, Pattern Wall, Escape Route, Memory Table). Both players in a duel play the same game at the same time, with one try. After a 5-second intro, the game appears and the 60-second timer starts. In the Memory Table, the items are shown for the first 5 seconds.
+- **Who wins a duel.** If only one player is right, they win. If both are right, the faster one wins. If both are wrong or run out of time, there's a 30-second tie-breaker question: the right answer wins, otherwise the faster answer, and if nobody answers, a random draw.
+- **Timing without a boss.** No phone is "in charge" of the clock. Every phone calls `round1.settle()` each second, which applies whatever is due (closing games when time is up, deciding duels, starting tie-breakers, showing results, moving on to Round 2 after 8 seconds). Running it twice changes nothing, so it doesn't matter which phone gets there first.
 - **Who is who.** When you create or join, you get a random player id that's kept in your page address (`?code=KQZT&me=p_...`). Refreshing the page keeps you in the game. Only the host's id can start the tournament or remove players.
 
 ## Known limits
