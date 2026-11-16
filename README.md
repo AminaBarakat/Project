@@ -42,7 +42,10 @@ uv run pytest
 | `storage.py` | Saves tournaments in a shared SQLite database (`data/game.db`) so all phones see the same game |
 | `screens/home.py` | Create a tournament / join with a code |
 | `screens/lobby.py` | The waiting room. Refreshes every 2 seconds |
-| `screens/duels.py` | The Round 1 duels after the host starts |
+| `round1.py` | Round 1 rules: the four challenges, the 3-minute timer, tie-breakers, results |
+| `screens/round1.py` | Round 1 on each phone: intro, board, waiting room, tie-breaker, results |
+| `screens/duels.py` | The list of duels (shown in the Round 1 intro) |
+| `screens/round2.py` | Placeholder showing who's still in |
 | `screens/common.py` | Shared bits: title, how a player is shown (avatar slot), messages |
 | `tests/` | Tests for the rules and the storage |
 
@@ -51,6 +54,8 @@ uv run pytest
 - **Shared state.** Each phone runs its own copy of the screens, so the tournament can't live in one phone's memory. It lives in `data/game.db`, and every screen reads it from there.
 - **Live updates.** The lobby re-reads the database every 2 seconds (`st.fragment(run_every="2s")`), so new players appear on everyone's screen within a couple of seconds.
 - **Simultaneous actions.** Updates happen one at a time (`BEGIN IMMEDIATE` in `storage.update`). If two people grab the last seat at once, the first one saved gets it and the other is told the tournament is full. `tests/test_storage.py` checks this with 12 people joining at the same moment.
+- **Round 1 timing.** When the host starts, Round 1 begins 5 seconds later and lasts 3 minutes. No phone is "in charge" of the clock: every phone calls `round1.settle()` each second, which applies whatever is due (closing boards when time is up, deciding duels, starting a 30-second tie-breaker on equal scores, showing results, moving on to Round 2 after 8 seconds). Running it twice changes nothing, so it doesn't matter which phone gets there first.
+- **Ties.** Equal scores → one tie-breaker question. If exactly one player is right, they win. If both are right or both wrong, the faster answer wins. If nobody answers in 30 seconds, it's a random draw.
 - **Who is who.** When you create or join, you get a random player id that's kept in your page address (`?code=KQZT&me=p_...`). Refreshing the page keeps you in the game. Only the host's id can start the tournament or remove players.
 
 ## Known limits

@@ -9,12 +9,14 @@ A tournament looks like this:
 
     {
         "code": "KQZT",                 # the join code players type in
-        "status": "lobby",              # "lobby" → "round1" (later rounds come later)
+        "status": "lobby",              # "lobby" → "round1" → "round1_results" → "round2"
         "host_id": "p_3f9a...",         # the player who created it; only they can start
         "players": [                    # in the order they joined; the host is first
             {"id": "p_3f9a...", "name": "Ana", "appearance": None},
         ],
         "duels": [],                    # filled in at start: [[id, id], [id, id], ...]
+        "eliminated": [],               # ids, in the order they were knocked out
+        "round1": None,                 # Round 1's own state, see round1.py
     }
 
 "appearance" is empty for now. It's the slot for avatars/colours when we do styling.
@@ -22,6 +24,9 @@ A tournament looks like this:
 
 import copy
 import random
+import time
+
+import round1
 
 MAX_PLAYERS = 8
 MAX_NAME_LENGTH = 20
@@ -51,6 +56,8 @@ def new_tournament(code, host_id, host_name):
         "host_id": host_id,
         "players": [{"id": host_id, "name": name, "appearance": None}],
         "duels": [],
+        "eliminated": [],
+        "round1": None,
     }
     return tournament, f"Tournament {code} created. Share the code with your friends!"
 
@@ -116,11 +123,12 @@ def remove_player(tournament, by_id, player_id):
     return new, f"{player['name']} was removed."
 
 
-def start(tournament, by_id, rng=None):
+def start(tournament, by_id, rng=None, now=None):
     """The host starts the tournament: players are shuffled into random 1 v 1 duels.
 
     rng is a random.Random. The tests pass one with a fixed seed so the draw is
-    predictable; the app leaves it out and gets a truly random draw."""
+    predictable; the app leaves it out and gets a truly random draw.
+    now is the current time (time.time()); Round 1 begins a few seconds later."""
     if not is_host(tournament, by_id):
         return tournament, "Only the host can start the tournament."
     if tournament["status"] != "lobby":
@@ -136,6 +144,7 @@ def start(tournament, by_id, rng=None):
     new = copy.deepcopy(tournament)
     new["duels"] = [[ids[i], ids[i + 1]] for i in range(0, len(ids), 2)]
     new["status"] = "round1"
+    new["round1"] = round1.new_round(new["duels"], time.time() if now is None else now)
     return new, "The duels are set. Let the games begin!"
 
 

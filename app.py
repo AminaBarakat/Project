@@ -13,7 +13,9 @@ import streamlit as st
 
 import storage
 import tournament as rules
-from screens import common, duels, home, lobby
+from screens import common, home, lobby
+from screens import round1 as round1_screen
+from screens import round2 as round2_screen
 
 st.set_page_config(page_title=common.TITLE, page_icon="🗝️", layout="centered")
 
@@ -48,5 +50,7 @@ if not rules.find_player(tour, me):
 
 if tour["status"] == "lobby":
     lobby.show(tour["code"], me)
+elif tour["status"] in ("round1", "round1_results"):
+    round1_screen.show(tour["code"], me)
 else:
-    duels.show(tour, me)
+    round2_screen.show(tour, me)
