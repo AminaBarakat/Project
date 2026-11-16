@@ -1,16 +1,22 @@
-"""Round 1: the Challenge Board.
+"""Round 1: the duels.
 
-All 4 duels happen at the same time. Both players in a duel get the same four
-challenges on their own phone and have 3 minutes. One point per right answer.
+All 4 duels happen at the same time. Each duel gets ONE game, drawn at random, and
+every duel gets a different one. Both players in a duel play the same game on their
+own phone, with one try and 60 seconds.
 
-    intro (5 s) → playing (3 min) → [tie-breaker (30 s)] → results (8 s) → Round 2
+    intro (5 s) → game (60 s) → [tie-breaker (30 s)] → results (8 s) → Round 2
+
+Who wins a duel:
+    - only one player is right                → they win
+    - both are right                           → the faster one wins
+    - both are wrong (or ran out of time)      → tie-breaker question
 
 Time matters here, so every function takes `now` (seconds, like time.time()). The
-app passes the real time; the tests pass made-up times so they can "jump" a few
-minutes ahead instead of waiting.
+app passes the real time; the tests pass made-up times so they can "jump" ahead
+instead of waiting.
 
 Nobody's phone is in charge of the clock. Every phone regularly calls `settle()`,
-which applies whatever is due: closing boards when time runs out, deciding duels,
+which applies whatever is due: closing games when time runs out, deciding duels,
 starting tie-breakers, showing results, moving on to Round 2. Doing it twice
 changes nothing, so it doesn't matter which phone gets there first.
 
@@ -22,41 +28,81 @@ import copy
 import random
 
 INTRO_SECONDS = 5
-ROUND_SECONDS = 180
+GAME_SECONDS = 60
 TIEBREAK_SECONDS = 30
 RESULTS_SECONDS = 8
+MEMORY_SHOW_SECONDS = 6      # the memory items are shown for the first 6 s of the game
 
-# --- the four challenges -----------------------------------------------------
+# --- the four games -------------------------------------------------------------
+# Every puzzle below has exactly one answer; tests/test_round1.py checks that by
+# trying every possibility.
 
+NUMBER_LOCK_RULE = "The code has 4 digits, all different."
 NUMBER_LOCK_CLUES = [
-    ("682", "One digit is correct and in the right place"),
-    ("614", "One digit is correct but in the wrong place"),
-    ("206", "Two digits are correct, but both are in the wrong place"),
-    ("738", "No digits are correct"),
-    ("780", "One digit is correct but in the wrong place"),
+    ("4865", "One digit is right and in the right place; one is right but in the wrong place"),
+    ("0423", "Two digits are right, but both are in the wrong place"),
+    ("5874", "One digit is right but in the wrong place"),
+    ("6753", "One digit is right and in the right place; one is right but in the wrong place"),
+    ("2731", "One digit is right but in the wrong place"),
 ]
-NUMBER_LOCK_ANSWER = "042"          # the only code that fits all five clues
+NUMBER_LOCK_FEEDBACK = {"4865": (1, 1), "0423": (0, 2), "5874": (0, 1), "6753": (1, 1), "2731": (0, 1)}
+NUMBER_LOCK_ANSWER = "6205"
 
-PATTERN_GRID = [["▲", "■", "●"], ["■", "●", "▲"], ["●", "▲", "?"]]
-PATTERN_OPTIONS = {"triangle": "▲", "square": "■", "circle": "●"}
-PATTERN_ANSWER = "square"
+# A 4 × 4 wall: every row and every column has each shape once and each colour once.
+PATTERN_GRID = [
+    [("triangle", "royal"), ("square", "purple"), ("circle", "silver"), ("diamond", "ice")],
+    [("square", "ice"), ("triangle", "silver"), ("diamond", "purple"), ("circle", "royal")],
+    [("circle", "purple"), None, ("triangle", "ice"), ("square", "silver")],
+    [("diamond", "silver"), ("circle", "ice"), ("square", "royal"), ("triangle", "purple")],
+]   # None is the missing tile
+PATTERN_OPTIONS = {
+    "A": ("circle", "royal"),
+    "B": ("diamond", "purple"),
+    "C": ("diamond", "royal"),
+    "D": ("square", "royal"),
+}
+PATTERN_ANSWER = "C"
 
 ESCAPE_CLUES = [
-    "Avoid rooms containing food.",
-    "Avoid rooms containing clocks.",
-    "The exit is reached through the room with books.",
+    "Avoid any room with food in it.",
+    "Avoid any room where something ticks.",
+    "A guard patrols the Conservatory.",
+    "The portraits in the Gallery hide an alarm.",
+    "The Exit is reached through the Study.",
 ]
 ESCAPE_MAP = {
-    "Start": ["Hall", "Kitchen"],
-    "Hall": ["Library", "Clock Room"],
-    "Library": ["Exit", "Storage Room"],
+    "Start": ["Hall", "Kitchen", "Conservatory"],
+    "Hall": ["Library", "Clock Room", "Gallery"],
+    "Kitchen": ["Pantry", "Gallery"],
+    "Conservatory": ["Greenhouse", "Library"],
+    "Library": ["Study", "Storage Room"],
+    "Gallery": ["Study", "Ballroom"],
+    "Clock Room": ["Study"],
+    "Study": ["Exit", "Wine Cellar"],
+    "Ballroom": ["Exit"],
 }   # rooms not listed as keys are dead ends
-ESCAPE_ANSWER = ["Hall", "Library", "Exit"]
+ESCAPE_ROOMS = {   # what you see on each door
+    "Hall": "A grand staircase, very quiet.",
+    "Kitchen": "It smells of fresh bread.",
+    "Conservatory": "Footsteps echo between the palms.",
+    "Library": "Books from floor to ceiling.",
+    "Clock Room": "Dozens of clocks on every wall.",
+    "Gallery": "Old portraits watch you pass.",
+    "Pantry": "Shelves full of jam jars.",
+    "Greenhouse": "Glass walls, no other door.",
+    "Study": "A desk covered in maps.",
+    "Storage Room": "Dusty boxes, no other door.",
+    "Ballroom": "A grandfather clock stands in the corner.",
+    "Wine Cellar": "Bottles, cheese and a locked gate.",
+    "Exit": "Fresh night air!",
+}
+ESCAPE_ANSWER = ["Hall", "Library", "Study", "Exit"]
 
-MEMORY_ITEMS = ["Key", "Compass", "Rose", "Coin", "Feather", "Chess piece"]
-MEMORY_ANSWER = "Compass"
+MEMORY_ITEMS = ["Key", "Compass", "Rose", "Coin", "Feather", "Chess piece", "Candle", "Pocket watch"]
+MEMORY_MISSING = ["Compass", "Candle"]          # the two that disappear
+MEMORY_REMAINING = ["Feather", "Coin", "Pocket watch", "Key", "Chess piece", "Rose"]   # shuffled order
 
-CHALLENGES = {
+GAMES = {
     "number_lock": "🔐 Number Lock",
     "pattern": "🧩 Pattern Wall",
     "escape_route": "🗺️ Escape Route",
@@ -68,20 +114,20 @@ TIEBREAK_QUESTION = ("I am a two-digit number. My digits add up to 9. "
 TIEBREAK_ANSWER = "45"
 
 
-def check(challenge_id, value):
+def check(game, value):
     """Is this answer 'right', 'wrong', or 'invalid' (wrong format: doesn't use the try)?"""
-    if challenge_id == "number_lock":
+    if game == "number_lock":
         code = value.strip() if isinstance(value, str) else ""
-        if len(code) != 3 or not code.isdigit():
+        if len(code) != 4 or not code.isdigit() or len(set(code)) != 4:
             return "invalid"
         return "right" if code == NUMBER_LOCK_ANSWER else "wrong"
 
-    if challenge_id == "pattern":
+    if game == "pattern":
         if value not in PATTERN_OPTIONS:
             return "invalid"
         return "right" if value == PATTERN_ANSWER else "wrong"
 
-    if challenge_id == "escape_route":
+    if game == "escape_route":
         if not isinstance(value, list) or not value:
             return "invalid"
         here = "Start"
@@ -93,27 +139,33 @@ def check(challenge_id, value):
             return "invalid"                # stopped before reaching a dead end
         return "right" if value == ESCAPE_ANSWER else "wrong"
 
-    if challenge_id == "memory":
-        if not isinstance(value, str):
+    if game == "memory":
+        # Exactly two different items, picked from the eight.
+        if not isinstance(value, list) or len(value) != 2:
             return "invalid"
         names = {item.casefold(): item for item in MEMORY_ITEMS}
-        item = names.get(value.strip().casefold())
-        if item is None:
+        picked = {names.get(v.strip().casefold()) if isinstance(v, str) else None for v in value}
+        if None in picked or len(picked) != 2:
             return "invalid"
-        return "right" if item == MEMORY_ANSWER else "wrong"
+        return "right" if picked == set(MEMORY_MISSING) else "wrong"
 
     return "invalid"
 
 
 # --- setting up --------------------------------------------------------------
 
-def new_round(duels, now):
-    """The Round 1 part of the tournament, created when the host starts."""
+def new_round(duels, now, rng=None):
+    """The Round 1 part of the tournament, created when the host starts.
+    Each duel gets a different game, in random order."""
+    games = list(GAMES)
+    (rng or random.Random()).shuffle(games)
     starts_at = now + INTRO_SECONDS
     return {
         "starts_at": starts_at,
-        "ends_at": starts_at + ROUND_SECONDS,
-        "boards": {pid: {"answers": {}, "finished_at": None} for duel in duels for pid in duel},
+        "ends_at": starts_at + GAME_SECONDS,
+        "games": games[:len(duels)],          # games[i] is the game of duel i
+        "answers": {pid: None for duel in duels for pid in duel},
+        # an answer is {"correct": True/False, "at": time}; None = not answered yet
         "tiebreaks": {},          # duel number (as text) → {"started_at", "answers": {pid: {...}}}
         "results": [None] * len(duels),
         "results_at": None,
@@ -122,16 +174,21 @@ def new_round(duels, now):
 
 # --- what a player can see ---------------------------------------------------
 
-def score(tour, player_id):
-    answers = tour["round1"]["boards"][player_id]["answers"]
-    return sum(1 for result in answers.values() if result)
-
-
 def duel_index(tour, player_id):
     for i, duel in enumerate(tour["duels"]):
         if player_id in duel:
             return i
     return None
+
+
+def game_of(tour, player_id):
+    """The game id this player plays, e.g. 'escape_route'."""
+    return tour["round1"]["games"][duel_index(tour, player_id)]
+
+
+def is_done(tour, player_id, now):
+    """Answered, or out of time."""
+    return tour["round1"]["answers"][player_id] is not None or now >= tour["round1"]["ends_at"]
 
 
 def phase(tour, player_id, now):
@@ -148,72 +205,86 @@ def phase(tour, player_id, now):
     tiebreak = r1["tiebreaks"].get(str(i))
     if tiebreak and r1["results"][i] is None and player_id not in tiebreak["answers"]:
         return "tiebreak"
-    if r1["boards"][player_id]["finished_at"] is None:
+    if not is_done(tour, player_id, now):
         return "playing"
     return "waiting"
 
 
+def memory_items_visible(tour, now):
+    """During the first few seconds of the game, the memory items are on screen."""
+    return now < tour["round1"]["starts_at"] + MEMORY_SHOW_SECONDS
+
+
+def _ceil(x):
+    return max(0, int(x + 0.999))
+
+
 def seconds_left(tour, now):
-    return max(0, int(tour["round1"]["ends_at"] - now + 0.999))
+    return _ceil(tour["round1"]["ends_at"] - now)
+
+
+def intro_seconds_left(tour, now):
+    return _ceil(tour["round1"]["starts_at"] - now)
 
 
 def tiebreak_seconds_left(tour, player_id, now):
     tiebreak = tour["round1"]["tiebreaks"].get(str(duel_index(tour, player_id)))
-    if not tiebreak:
-        return 0
-    return max(0, int(tiebreak["started_at"] + TIEBREAK_SECONDS - now + 0.999))
+    return _ceil(tiebreak["started_at"] + TIEBREAK_SECONDS - now) if tiebreak else 0
 
 
 def results_seconds_left(tour, now):
     at = tour["round1"]["results_at"]
-    return 0 if at is None else max(0, int(at + RESULTS_SECONDS - now + 0.999))
+    return 0 if at is None else _ceil(at + RESULTS_SECONDS - now)
 
 
-def finished_count(tour):
-    return sum(1 for b in tour["round1"]["boards"].values() if b["finished_at"] is not None)
+def finished_count(tour, now):
+    return sum(1 for pid in tour["round1"]["answers"] if is_done(tour, pid, now))
+
+
+def time_taken(tour, player_id):
+    """Seconds from the start of the game to this player's answer, or None."""
+    answer = tour["round1"]["answers"][player_id]
+    return None if answer is None else round(answer["at"] - tour["round1"]["starts_at"], 1)
 
 
 # --- actions ------------------------------------------------------------------
 
-def answer(tour, player_id, challenge_id, value, now):
-    """A player answers one challenge on their board."""
-    if tour["status"] != "round1" or player_id not in tour["round1"]["boards"]:
+def answer(tour, player_id, value, now):
+    """A player answers their duel's game. One try."""
+    if tour["status"] != "round1" or player_id not in tour["round1"]["answers"]:
         return tour, "You can't answer right now."
     r1 = tour["round1"]
-    board = r1["boards"][player_id]
     if now < r1["starts_at"]:
-        return tour, "Wait, the round hasn't started yet!"
-    if board["finished_at"] is not None or now >= r1["ends_at"]:
-        return tour, "Your board is closed."
-    if challenge_id not in CHALLENGES:
-        return tour, "That challenge doesn't exist."
-    if challenge_id in board["answers"]:
-        return tour, "You've already answered that one."
-    result = check(challenge_id, value)
+        return tour, "Wait, the game hasn't started yet!"
+    if r1["answers"][player_id] is not None:
+        return tour, "You've already answered."
+    if now >= r1["ends_at"]:
+        return tour, "Time's up!"
+    game = game_of(tour, player_id)
+    if game == "memory" and memory_items_visible(tour, now):
+        return tour, "Wait until the items are hidden."
+    result = check(game, value)
     if result == "invalid":
-        return tour, _format_hint(challenge_id)
+        return tour, _format_hint(game)
 
     new = copy.deepcopy(tour)
-    new_board = new["round1"]["boards"][player_id]
-    new_board["answers"][challenge_id] = result == "right"
-    if len(new_board["answers"]) == len(CHALLENGES):
-        new_board["finished_at"] = now
+    new["round1"]["answers"][player_id] = {"correct": result == "right", "at": now}
     new, _ = settle(new, now)
     return new, "✅ Correct!" if result == "right" else "❌ Not quite."
 
 
-def _format_hint(challenge_id):
+def _format_hint(game):
     return {
-        "number_lock": "The code is exactly 3 digits.",
-        "pattern": "Pick one of the three symbols.",
+        "number_lock": "The code is 4 different digits.",
+        "pattern": "Pick one of the four tiles.",
         "escape_route": "Keep going until you reach the end of a path.",
-        "memory": "Pick one of the items.",
-    }.get(challenge_id, "That answer isn't valid.")
+        "memory": "Pick exactly two items.",
+    }.get(game, "That answer isn't valid.")
 
 
 def answer_tiebreak(tour, player_id, value, now, rng=None):
     """A player answers the tie-breaker question (one try)."""
-    if tour["status"] != "round1" or player_id not in tour["round1"]["boards"]:
+    if tour["status"] != "round1" or player_id not in tour["round1"]["answers"]:
         return tour, "There's no tie-breaker right now."
     i = duel_index(tour, player_id)
     tiebreak = tour["round1"]["tiebreaks"].get(str(i))
@@ -243,18 +314,10 @@ def settle(tour, now, rng=None):
     r1 = new["round1"]
 
     if new["status"] == "round1":
-        # 1. Time's up: close every unfinished board (unanswered challenges count as 0).
-        if now >= r1["ends_at"]:
-            for board in r1["boards"].values():
-                if board["finished_at"] is None:
-                    board["finished_at"] = r1["ends_at"]
-
-        # 2. Decide every duel that can be decided.
         for i, (a, b) in enumerate(new["duels"]):
             if r1["results"][i] is None:
                 _decide_duel(new, i, a, b, now, rng)
 
-        # 3. All duels decided: show the results.
         if all(r1["results"]):
             new["status"] = "round1_results"
             r1["results_at"] = now
@@ -270,17 +333,19 @@ def settle(tour, now, rng=None):
 
 def _decide_duel(tour, i, a, b, now, rng):
     r1 = tour["round1"]
-    board_a, board_b = r1["boards"][a], r1["boards"][b]
-    if board_a["finished_at"] is None or board_b["finished_at"] is None:
+    if not (is_done(tour, a, now) and is_done(tour, b, now)):
         return                                        # someone is still playing
 
-    points = {a: score(tour, a), b: score(tour, b)}
-    if points[a] != points[b]:
-        winner = a if points[a] > points[b] else b
-        _record(tour, i, winner, b if winner == a else a, points, "score")
+    right = [pid for pid in (a, b) if (r1["answers"][pid] or {}).get("correct")]
+    if len(right) == 1:
+        _record(tour, i, right[0], a, b, "right answer")
+        return
+    if len(right) == 2:
+        faster = min(right, key=lambda pid: r1["answers"][pid]["at"])
+        _record(tour, i, faster, a, b, "faster")
         return
 
-    # Same score: tie-breaker.
+    # Both wrong (or out of time): tie-breaker.
     tiebreak = r1["tiebreaks"].get(str(i))
     if tiebreak is None:
         r1["tiebreaks"][str(i)] = {"started_at": now, "answers": {}}
@@ -295,11 +360,12 @@ def _decide_duel(tour, i, a, b, now, rng):
         winner, how = right[0], "tie-breaker"
     elif answers:
         # Both right or both wrong (or only one answered in time): fastest answer wins.
-        winner, how = min(answers, key=lambda pid: answers[pid]["at"]), "fastest answer"
+        winner, how = min(answers, key=lambda pid: answers[pid]["at"]), "tie-breaker speed"
     else:
         winner, how = (rng or random.Random()).choice([a, b]), "draw"
-    _record(tour, i, winner, b if winner == a else a, points, how)
+    _record(tour, i, winner, a, b, how)
 
 
-def _record(tour, i, winner, loser, points, how):
-    tour["round1"]["results"][i] = {"winner": winner, "loser": loser, "points": points, "decided_by": how}
+def _record(tour, i, winner, a, b, how):
+    loser = b if winner == a else a
+    tour["round1"]["results"][i] = {"winner": winner, "loser": loser, "decided_by": how}
