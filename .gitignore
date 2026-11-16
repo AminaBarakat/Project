@@ -181,3 +181,6 @@ cython_debug/
 .cursorindexingignore
 # Saved games: player progress, not code (Feature 4)
 data/
+
+# Supabase URL/key for local development. Never commit credentials.
+.streamlit/secrets.toml

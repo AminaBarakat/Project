@@ -19,6 +19,16 @@ from screens import round2 as round2_screen
 
 st.set_page_config(page_title=common.TITLE, page_icon="🗝️", layout="centered")
 
+# On a laptop, storage.py uses the local SQLite file.  On Streamlit Community
+# Cloud, these two values are added in the app's Secrets settings so every
+# visitor uses the same online Supabase database.  Secrets are deliberately
+# not stored in this GitHub repository.
+if "supabase" in st.secrets:
+    storage.configure_supabase(
+        st.secrets["supabase"]["url"],
+        st.secrets["supabase"]["key"],
+    )
+
 code = st.query_params.get("code")
 me = st.query_params.get("me")
 
