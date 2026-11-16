@@ -31,37 +31,76 @@ INTRO_SECONDS = 5
 GAME_SECONDS = 60
 TIEBREAK_SECONDS = 30
 RESULTS_SECONDS = 8
-MEMORY_SHOW_SECONDS = 5      # the memory items are shown for the first 5 s of the game
+MEMORY_SHOW_SECONDS = 6      # the memory items are shown for the first 6 s of the game
 
 # --- the four games -------------------------------------------------------------
+# Every puzzle below has exactly one answer; tests/test_round1.py checks that by
+# trying every possibility.
 
+NUMBER_LOCK_RULE = "The code has 4 digits, all different."
 NUMBER_LOCK_CLUES = [
-    ("682", "One digit is correct and in the right place"),
-    ("614", "One digit is correct but in the wrong place"),
-    ("206", "Two digits are correct, but both are in the wrong place"),
-    ("738", "No digits are correct"),
-    ("780", "One digit is correct but in the wrong place"),
+    ("4865", "One digit is right and in the right place; one is right but in the wrong place"),
+    ("0423", "Two digits are right, but both are in the wrong place"),
+    ("5874", "One digit is right but in the wrong place"),
+    ("6753", "One digit is right and in the right place; one is right but in the wrong place"),
+    ("2731", "One digit is right but in the wrong place"),
 ]
-NUMBER_LOCK_ANSWER = "042"          # the only code that fits all five clues
+NUMBER_LOCK_FEEDBACK = {"4865": (1, 1), "0423": (0, 2), "5874": (0, 1), "6753": (1, 1), "2731": (0, 1)}
+NUMBER_LOCK_ANSWER = "6205"
 
-PATTERN_GRID = [["▲", "■", "●"], ["■", "●", "▲"], ["●", "▲", "?"]]
-PATTERN_OPTIONS = {"triangle": "▲", "square": "■", "circle": "●"}
-PATTERN_ANSWER = "square"
+# A 4 × 4 wall: every row and every column has each shape once and each colour once.
+PATTERN_GRID = [
+    [("triangle", "royal"), ("square", "purple"), ("circle", "silver"), ("diamond", "ice")],
+    [("square", "ice"), ("triangle", "silver"), ("diamond", "purple"), ("circle", "royal")],
+    [("circle", "purple"), None, ("triangle", "ice"), ("square", "silver")],
+    [("diamond", "silver"), ("circle", "ice"), ("square", "royal"), ("triangle", "purple")],
+]   # None is the missing tile
+PATTERN_OPTIONS = {
+    "A": ("circle", "royal"),
+    "B": ("diamond", "purple"),
+    "C": ("diamond", "royal"),
+    "D": ("square", "royal"),
+}
+PATTERN_ANSWER = "C"
 
 ESCAPE_CLUES = [
-    "Avoid rooms containing food.",
-    "Avoid rooms containing clocks.",
-    "The exit is reached through the room with books.",
+    "Avoid any room with food in it.",
+    "Avoid any room where something ticks.",
+    "A guard patrols the Conservatory.",
+    "The portraits in the Gallery hide an alarm.",
+    "The Exit is reached through the Study.",
 ]
 ESCAPE_MAP = {
-    "Start": ["Hall", "Kitchen"],
-    "Hall": ["Library", "Clock Room"],
-    "Library": ["Exit", "Storage Room"],
+    "Start": ["Hall", "Kitchen", "Conservatory"],
+    "Hall": ["Library", "Clock Room", "Gallery"],
+    "Kitchen": ["Pantry", "Gallery"],
+    "Conservatory": ["Greenhouse", "Library"],
+    "Library": ["Study", "Storage Room"],
+    "Gallery": ["Study", "Ballroom"],
+    "Clock Room": ["Study"],
+    "Study": ["Exit", "Wine Cellar"],
+    "Ballroom": ["Exit"],
 }   # rooms not listed as keys are dead ends
-ESCAPE_ANSWER = ["Hall", "Library", "Exit"]
+ESCAPE_ROOMS = {   # what you see on each door
+    "Hall": "A grand staircase, very quiet.",
+    "Kitchen": "It smells of fresh bread.",
+    "Conservatory": "Footsteps echo between the palms.",
+    "Library": "Books from floor to ceiling.",
+    "Clock Room": "Dozens of clocks on every wall.",
+    "Gallery": "Old portraits watch you pass.",
+    "Pantry": "Shelves full of jam jars.",
+    "Greenhouse": "Glass walls, no other door.",
+    "Study": "A desk covered in maps.",
+    "Storage Room": "Dusty boxes, no other door.",
+    "Ballroom": "A grandfather clock stands in the corner.",
+    "Wine Cellar": "Bottles, cheese and a locked gate.",
+    "Exit": "Fresh night air!",
+}
+ESCAPE_ANSWER = ["Hall", "Library", "Study", "Exit"]
 
-MEMORY_ITEMS = ["Key", "Compass", "Rose", "Coin", "Feather", "Chess piece"]
-MEMORY_ANSWER = "Compass"
+MEMORY_ITEMS = ["Key", "Compass", "Rose", "Coin", "Feather", "Chess piece", "Candle", "Pocket watch"]
+MEMORY_MISSING = ["Compass", "Candle"]          # the two that disappear
+MEMORY_REMAINING = ["Feather", "Coin", "Pocket watch", "Key", "Chess piece", "Rose"]   # shuffled order
 
 GAMES = {
     "number_lock": "🔐 Number Lock",
@@ -79,7 +118,7 @@ def check(game, value):
     """Is this answer 'right', 'wrong', or 'invalid' (wrong format: doesn't use the try)?"""
     if game == "number_lock":
         code = value.strip() if isinstance(value, str) else ""
-        if len(code) != 3 or not code.isdigit():
+        if len(code) != 4 or not code.isdigit() or len(set(code)) != 4:
             return "invalid"
         return "right" if code == NUMBER_LOCK_ANSWER else "wrong"
 
@@ -101,13 +140,14 @@ def check(game, value):
         return "right" if value == ESCAPE_ANSWER else "wrong"
 
     if game == "memory":
-        if not isinstance(value, str):
+        # Exactly two different items, picked from the eight.
+        if not isinstance(value, list) or len(value) != 2:
             return "invalid"
         names = {item.casefold(): item for item in MEMORY_ITEMS}
-        item = names.get(value.strip().casefold())
-        if item is None:
+        picked = {names.get(v.strip().casefold()) if isinstance(v, str) else None for v in value}
+        if None in picked or len(picked) != 2:
             return "invalid"
-        return "right" if item == MEMORY_ANSWER else "wrong"
+        return "right" if picked == set(MEMORY_MISSING) else "wrong"
 
     return "invalid"
 
@@ -235,10 +275,10 @@ def answer(tour, player_id, value, now):
 
 def _format_hint(game):
     return {
-        "number_lock": "The code is exactly 3 digits.",
-        "pattern": "Pick one of the three symbols.",
+        "number_lock": "The code is 4 different digits.",
+        "pattern": "Pick one of the four tiles.",
         "escape_route": "Keep going until you reach the end of a path.",
-        "memory": "Pick one of the items.",
+        "memory": "Pick exactly two items.",
     }.get(game, "That answer isn't valid.")
 
 

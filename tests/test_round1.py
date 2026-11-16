@@ -15,16 +15,16 @@ END = START + r1.GAME_SECONDS
 NAMES = ["Ana", "Bruno", "Carla", "Dani", "Eva", "Filipe", "Gui", "Helena"]
 
 RIGHT = {
-    "number_lock": "042",
-    "pattern": "square",
-    "escape_route": ["Hall", "Library", "Exit"],
-    "memory": "Compass",
+    "number_lock": "6205",
+    "pattern": "C",
+    "escape_route": ["Hall", "Library", "Study", "Exit"],
+    "memory": ["Compass", "Candle"],
 }
 WRONG = {
-    "number_lock": "999",
-    "pattern": "circle",
-    "escape_route": ["Kitchen"],
-    "memory": "Key",
+    "number_lock": "1234",
+    "pattern": "A",
+    "escape_route": ["Kitchen", "Pantry"],
+    "memory": ["Compass", "Key"],
 }
 
 
@@ -52,42 +52,82 @@ def assert_refused(tour, result):
 # --- the games themselves ------------------------------------------------------
 
 def test_number_lock_answer_is_the_only_code_that_fits_the_clues():
+    from itertools import permutations
+
     def feedback(guess, code):
         right_place = sum(g == c for g, c in zip(guess, code))
-        common = sum(min(guess.count(d), code.count(d)) for d in set(guess))
-        return right_place, common - right_place
+        return right_place, len(set(guess) & set(code)) - right_place
 
-    expected = {"682": (1, 0), "614": (0, 1), "206": (0, 2), "738": (0, 0), "780": (0, 1)}
-    fits = [f"{n:03}" for n in range(1000)
-            if all(feedback(g, f"{n:03}") == expected[g] for g, _ in r1.NUMBER_LOCK_CLUES)]
+    codes = ["".join(p) for p in permutations("0123456789", 4)]      # 4 different digits
+    fits = [c for c in codes
+            if all(feedback(g, c) == r1.NUMBER_LOCK_FEEDBACK[g] for g, _ in r1.NUMBER_LOCK_CLUES)]
     assert fits == [r1.NUMBER_LOCK_ANSWER]
 
 
+def test_number_lock_clue_texts_match_the_feedback():
+    words = {(1, 1): "right place; one", (0, 2): "Two digits", (0, 1): "One digit is right but"}
+    for guess, text in r1.NUMBER_LOCK_CLUES:
+        assert words[r1.NUMBER_LOCK_FEEDBACK[guess]] in text
+
+
 def test_number_lock_checks():
-    assert r1.check("number_lock", " 042 ") == "right"
-    assert r1.check("number_lock", "420") == "wrong"
-    for bad in ["42", "0420", "4a2", "", None]:
+    assert r1.check("number_lock", " 6205 ") == "right"
+    assert r1.check("number_lock", "6250") == "wrong"
+    for bad in ["620", "62055", "62a5", "6605", "", None]:
         assert r1.check("number_lock", bad) == "invalid"
 
 
+def test_pattern_wall_has_exactly_one_tile_that_fits():
+    grid = r1.PATTERN_GRID
+    row, col = next((i, j) for i in range(4) for j in range(4) if grid[i][j] is None)
+    others = [grid[row][k] for k in range(4) if k != col] + [grid[k][col] for k in range(4) if k != row]
+    fits = [key for key, (shape, colour) in r1.PATTERN_OPTIONS.items()
+            if shape not in {s for s, _ in others} and colour not in {c for _, c in others}]
+    assert fits == [r1.PATTERN_ANSWER]
+
+
 def test_pattern_checks():
-    assert r1.check("pattern", "square") == "right"
-    assert r1.check("pattern", "circle") == "wrong"
-    assert r1.check("pattern", "star") == "invalid"
+    assert r1.check("pattern", "C") == "right"
+    assert r1.check("pattern", "A") == "wrong"
+    assert r1.check("pattern", "E") == "invalid"
+
+
+def test_escape_route_has_exactly_one_safe_path():
+    forbidden = {"Kitchen", "Pantry", "Wine Cellar",        # food
+                 "Clock Room", "Ballroom",                   # ticking
+                 "Conservatory", "Gallery"}                  # guard, alarm
+
+    def routes(here="Start", so_far=()):
+        if here not in r1.ESCAPE_MAP:
+            yield list(so_far)
+            return
+        for room in r1.ESCAPE_MAP[here]:
+            yield from routes(room, so_far + (room,))
+
+    safe = [r for r in routes() if r[-1] == "Exit" and r[-2] == "Study" and not forbidden & set(r)]
+    assert safe == [r1.ESCAPE_ANSWER]
+    assert all(room in r1.ESCAPE_ROOMS for rooms in r1.ESCAPE_MAP.values() for room in rooms)
 
 
 def test_escape_route_checks():
-    assert r1.check("escape_route", ["Hall", "Library", "Exit"]) == "right"
-    for wrong in (["Kitchen"], ["Hall", "Clock Room"], ["Hall", "Library", "Storage Room"]):
+    assert r1.check("escape_route", ["Hall", "Library", "Study", "Exit"]) == "right"
+    for wrong in (["Kitchen", "Pantry"], ["Hall", "Clock Room", "Study", "Exit"],
+                  ["Conservatory", "Library", "Study", "Exit"], ["Hall", "Library", "Storage Room"]):
         assert r1.check("escape_route", wrong) == "wrong"
-    for bad in (["Hall", "Exit"], ["Hall"], [], "Hall"):
+    for bad in (["Hall", "Exit"], ["Hall", "Library"], [], "Hall"):
         assert r1.check("escape_route", bad) == "invalid"
 
 
+def test_memory_shows_the_others_without_the_missing_two():
+    assert sorted(r1.MEMORY_REMAINING + r1.MEMORY_MISSING) == sorted(r1.MEMORY_ITEMS)
+
+
 def test_memory_checks():
-    assert r1.check("memory", "compass") == "right"
-    assert r1.check("memory", "Key") == "wrong"
-    assert r1.check("memory", "Dragon") == "invalid"
+    assert r1.check("memory", ["candle", " Compass"]) == "right"
+    assert r1.check("memory", ["Compass", "Key"]) == "wrong"
+    for bad in (["Compass"], ["Compass", "Compass"], ["Compass", "Dragon"],
+                ["Compass", "Candle", "Key"], "Compass"):
+        assert r1.check("memory", bad) == "invalid"
 
 
 # --- the draw of games --------------------------------------------------------
@@ -128,8 +168,8 @@ def test_no_answers_during_the_intro_or_after_time():
 def test_memory_answer_refused_while_items_are_still_shown():
     tour = started()
     pid = next(p for p in tour["round1"]["answers"] if r1.game_of(tour, p) == "memory")
-    assert_refused(tour, r1.answer(tour, pid, "Compass", START + 1))
-    tour, _ = r1.answer(tour, pid, "Compass", PLAY)
+    assert_refused(tour, r1.answer(tour, pid, ["Compass", "Candle"], START + 1))
+    tour, _ = r1.answer(tour, pid, ["Compass", "Candle"], PLAY)
     assert tour["round1"]["answers"][pid]["correct"] is True
 
 
@@ -144,7 +184,7 @@ def test_one_try_only():
 def test_invalid_answer_is_refused_and_does_not_use_the_try():
     tour = started()
     game = r1.game_of(tour, "p0")
-    bad = {"number_lock": "42", "pattern": "star", "escape_route": ["Hall"], "memory": "Dragon"}[game]
+    bad = {"number_lock": "42", "pattern": "Z", "escape_route": ["Hall"], "memory": ["Dragon"]}[game]
     assert_refused(tour, r1.answer(tour, "p0", bad, PLAY))
     tour = answer(tour, "p0", right=True)
     assert tour["round1"]["answers"]["p0"]["correct"] is True
@@ -152,7 +192,7 @@ def test_invalid_answer_is_refused_and_does_not_use_the_try():
 
 def test_unknown_player_is_refused():
     tour = started()
-    assert_refused(tour, r1.answer(tour, "stranger", "042", PLAY))
+    assert_refused(tour, r1.answer(tour, "stranger", "6205", PLAY))
 
 
 def test_answering_does_not_change_the_original():
@@ -313,4 +353,4 @@ def test_results_move_on_to_round2_after_8_seconds():
 
 def test_no_answers_once_results_are_shown():
     tour = everyone_done()
-    assert_refused(tour, r1.answer(tour, "p0", "042", PLAY))
+    assert_refused(tour, r1.answer(tour, "p0", "6205", PLAY))
