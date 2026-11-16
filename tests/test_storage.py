@@ -77,3 +77,27 @@ def test_twelve_people_joining_at_once_fill_exactly_8_seats(tmp_path):
     final = storage.load(tour["code"], path=db)
     assert len(final["players"]) == 8
     assert sum("full" in m for m in messages) == 5
+
+
+def test_supabase_update_only_saves_when_its_version_is_current():
+    """The online database must reject a stale save instead of losing a move."""
+    store = storage._SupabaseStore("https://example.supabase.co", "public-key")
+    calls = []
+
+    def pretend_request(method, query="", body=None, prefer=None):
+        calls.append((method, query, body, prefer))
+        return []  # Supabase returns no row when another player saved first.
+
+    store._request = pretend_request
+    assert store.save_if_current("ABCD", 4, {"code": "ABCD"}) is False
+    assert calls == [
+        ("PATCH", "?code=eq.ABCD&version=eq.4", {"data": {"code": "ABCD"}, "version": 5},
+         "return=representation")
+    ]
+
+
+def test_configure_supabase_needs_a_url_and_public_key(monkeypatch):
+    monkeypatch.setattr(storage, "_supabase", None)
+    storage.configure_supabase("https://example.supabase.co", "public-anon-key")
+    assert storage.using_supabase() is True
+    monkeypatch.setattr(storage, "_supabase", None)
