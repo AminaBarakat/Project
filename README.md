@@ -39,7 +39,7 @@ uv run pytest
 |------|--------------|
 | `app.py` | Start here. Decides which screen to show |
 | `tournament.py` | The rules: create, join, leave, remove, start, and the random duel draw |
-| `storage.py` | Saves tournaments in a shared SQLite database (`data/game.db`) so all phones see the same game |
+| `storage.py` | Saves tournaments: SQLite while developing locally, Supabase after deployment |
 | `screens/home.py` | Create a tournament / join with a code |
 | `screens/lobby.py` | The waiting room. Refreshes every 2 seconds |
 | `screens/duels.py` | The Round 1 duels after the host starts |
@@ -48,14 +48,28 @@ uv run pytest
 
 ## How it works
 
-- **Shared state.** Each phone runs its own copy of the screens, so the tournament can't live in one phone's memory. It lives in `data/game.db`, and every screen reads it from there.
+- **Shared state.** Each phone runs its own copy of the screens, so the tournament can't live in one phone's memory. Locally it lives in `data/game.db`. On the deployed app it lives in Supabase, so every phone reaches the same tournament.
 - **Live updates.** The lobby re-reads the database every 2 seconds (`st.fragment(run_every="2s")`), so new players appear on everyone's screen within a couple of seconds.
-- **Simultaneous actions.** Updates happen one at a time (`BEGIN IMMEDIATE` in `storage.update`). If two people grab the last seat at once, the first one saved gets it and the other is told the tournament is full. `tests/test_storage.py` checks this with 12 people joining at the same moment.
+- **Simultaneous actions.** Locally, updates happen one at a time (`BEGIN IMMEDIATE` in `storage.update`). In Supabase, an update saves only if the tournament version is still current; otherwise it rereads and retries the rule. If two people grab the last seat at once, the first one saved gets it and the other is told the tournament is full. `tests/test_storage.py` checks this with 12 people joining at the same moment.
 - **Who is who.** When you create or join, you get a random player id that's kept in your page address (`?code=KQZT&me=p_...`). Refreshing the page keeps you in the game. Only the host's id can start the tournament or remove players.
 
 ## Known limits
 
 - Anyone who gets hold of your full page address can act as you. There are no accounts. That's fine for a party game, but don't share your address, only the code.
-- On a free host the disk can be wiped when the app restarts, which ends any tournament in progress.
 - The lobby refreshes every 2 seconds, not instantly.
 - Exactly 8 players for now.
+
+## Put the multiplayer lobby online
+
+1. Create a free Supabase project.
+2. In its **SQL Editor**, run the script in `docs/supabase-setup.sql`.
+3. In **Project Settings → API**, copy the **Project URL** and the public **anon key**. Do not copy or share the `service_role` key.
+4. For local testing, create `.streamlit/secrets.toml` (it is ignored by Git):
+
+   ```toml
+   [supabase]
+   url = "https://your-project.supabase.co"
+   key = "your-public-anon-key"
+   ```
+
+5. For deployment, add the same two values under the Streamlit app's **Settings → Secrets**. Then every player uses the shared online lobby.
