@@ -13,7 +13,7 @@ REFRESH = "2s"
 
 
 def show(code, me):
-    st.title(f"🗝️ {common.TITLE}")
+    common.show_wordmark()
     st.markdown("Join code")
     st.markdown(f"# `{code}`")
     link = common.join_link(code)

@@ -24,18 +24,31 @@ def _detective_data_url():
 def _story_style():
     st.markdown("""
     <style>
-    .r3-story { background: radial-gradient(circle at 50% 25%, #44216b 0%, #160b2d 47%, #090515 100%);
-      border: 1px solid #8856cb; border-radius: 24px; min-height: 590px; overflow: hidden; padding: 1.2rem 1.2rem 0; }
-    .r3-story-kicker { color: #d8b9ff; font-size: .78rem; font-weight: 700; letter-spacing: .16em; text-align: center; }
-    .r3-detective { width: 230px; margin: .3rem auto -2.3rem; position: relative; animation: r3-bob 2.3s ease-in-out infinite; }
+    .r3-story { max-width: 1000px; margin: 0 auto; padding: .4rem 0 0; }
+    .r3-story-kicker { color: #e3c9ff; font-size: .78rem; font-weight: 700; letter-spacing: .16em; text-align: center; }
+    .r3-scene { display: grid; grid-template-columns: minmax(185px, .78fr) minmax(0, 1.55fr); align-items: center;
+      gap: clamp(1rem, 5vw, 3.5rem); min-height: 440px; padding: .5rem 1rem 0; }
+    .r3-detective { width: min(100%, 290px); margin: 0 auto; position: relative; align-self: end; animation: r3-bob 2.3s ease-in-out infinite; }
     .r3-detective img { width: 100%; display: block; filter: drop-shadow(0 0 20px #b249f7); }
     .r3-mouth { position: absolute; width: 19px; height: 5px; left: 47%; top: 25.1%; background: #57213a;
       border-radius: 0 0 12px 12px; animation: r3-talk .34s ease-in-out infinite alternate; }
-    .r3-speech { background: rgba(9, 5, 21, .86); border: 1px solid rgba(214, 169, 255, .55); border-radius: 17px;
-      color: #f7eeff; font-family: Georgia, serif; font-size: 1.14rem; line-height: 1.55; min-height: 168px; padding: 1.15rem 1.25rem; }
+    .r3-speech { background: rgba(12, 5, 27, .82); border: 1px solid rgba(220, 190, 255, .72); border-radius: 17px;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, .3), inset 0 0 28px rgba(135, 66, 193, .15); color: #f7eeff;
+      font-family: Georgia, serif; font-size: clamp(1.08rem, 2.3vw, 1.34rem); line-height: 1.62; min-height: 210px; padding: 1.4rem 1.55rem; }
     .r3-cursor { color: #e6a7ff; animation: r3-blink .75s step-end infinite; }
     .r3-question { color: #fff; font-family: Georgia, serif; font-size: 1.5rem; font-style: italic; line-height: 1.35;
       padding: 1.2rem .3rem .2rem; text-align: center; }
+    .r3-finalists { border-top: 1px solid rgba(223, 190, 255, .38); display: flex; gap: clamp(2rem, 9vw, 6rem);
+      justify-content: center; margin-top: .4rem; padding: 1rem 0 1.1rem; }
+    .r3-finalist { color: #f7eeff; font-family: Georgia, serif; font-size: 1rem; letter-spacing: .04em; text-align: center; }
+    .r3-avatar-ring { align-items: center; background: linear-gradient(145deg, #ffffff, #aeb4c0 42%, #fbfdff 66%, #777f8b);
+      border-radius: 50%; box-shadow: 0 0 0 3px rgba(183, 147, 235, .55), 0 5px 18px rgba(0,0,0,.5); display: flex;
+      height: 64px; justify-content: center; margin: 0 auto .45rem; padding: 4px; width: 64px; }
+    .r3-avatar-face { align-items: center; background: radial-gradient(circle at 38% 28%, #4e596c, #171426 72%); border-radius: 50%;
+      color: #e9eef5; display: flex; font-size: 1.55rem; height: 100%; justify-content: center; width: 100%; }
+    .r3-finalists-title { color: #d7b8f2; font-size: .72rem; font-weight: 700; letter-spacing: .16em; text-align: center; }
+    @media (max-width: 620px) { .r3-scene { grid-template-columns: 1fr; gap: 0; padding: .2rem 1rem 0; }
+      .r3-detective { width: 180px; margin-bottom: -1rem; } .r3-speech { min-height: 170px; } }
     @keyframes r3-bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-7px) } }
     @keyframes r3-talk { from { transform: scaleY(.55) } to { transform: scaleY(1.6) } }
     @keyframes r3-blink { 50% { opacity: 0 } }
@@ -68,11 +81,16 @@ def _live_round(code, me):
 
 def _story(tour, code, me, now):
     text = html.escape(r3.story_text(tour, now)).replace("\n", "<br>")
+    profiles = _finalist_profiles(tour)
     st.markdown(f"""
     <div class="r3-story">
       <div class="r3-story-kicker">FINAL MANSION MYSTERY · CASE FILE 03</div>
-      <div class="r3-detective"><img src="{_detective_data_url()}" alt="The detective briefing the finalists"><span class="r3-mouth"></span></div>
-      <div class="r3-speech">{text}<span class="r3-cursor">▍</span></div>
+      <div class="r3-scene">
+        <div class="r3-detective"><img src="{_detective_data_url()}" alt="The detective briefing the finalists"><span class="r3-mouth"></span></div>
+        <div class="r3-speech">{text}<span class="r3-cursor">▍</span></div>
+      </div>
+      <div class="r3-finalists-title">THE FINALISTS</div>
+      <div class="r3-finalists">{profiles}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -88,6 +106,18 @@ def _story(tour, code, me, now):
             st.rerun(scope="app")
     else:
         st.info("The finalists will open the final case when they are ready.")
+
+
+def _finalist_profiles(tour):
+    """Silver-framed placeholders until the game later supports photo uploads."""
+    profiles = []
+    for player_id in tour["round3"]["finalists"]:
+        player = rules.find_player(tour, player_id)
+        name = html.escape(player["name"])
+        profiles.append(
+            f"<div class='r3-finalist'><div class='r3-avatar-ring'><div class='r3-avatar-face'>🕵️</div></div>{name}</div>"
+        )
+    return "".join(profiles)
 
 
 def _mystery(tour, code, me, now):
