@@ -140,9 +140,19 @@ def _end_screen(code, tour, me, view):
 
     winners_html = "".join(common.profile_card(player, "passed") for player in winner_players)
     st.markdown(
-        "<div class='mm-results-grid' style='grid-template-columns:minmax(260px, 420px);justify-content:center'>"
+        "<style>"
+        ".mm-r2-winners .mm-result-duel{padding:1.2rem .9rem}"
+        ".mm-r2-winners .mm-result-duel-title{font-size:1.05rem;margin-bottom:1rem}"
+        ".mm-r2-winners .mm-result-pair{gap:clamp(1rem,5vw,3rem)}"
+        ".mm-r2-winners .mm-result-pair .mm-profile-photo{width:132px;height:132px}"
+        ".mm-r2-winners .mm-profile-name{font-size:1.08rem;margin-top:.3rem}"
+        ".mm-r2-winners .mm-profile-status{font-size:.92rem;margin-top:.35rem}"
+        "@media(max-width:560px){.mm-r2-winners .mm-result-pair .mm-profile-photo{width:104px;height:104px}}"
+        "</style>"
+        "<div class='mm-r2-winners'><div class='mm-results-grid' "
+        "style='grid-template-columns:minmax(340px, 600px);justify-content:center'>"
         "<div class='mm-result-duel'><div class='mm-result-duel-title'>The winning duo</div>"
-        f"<div class='mm-result-pair'>{winners_html}</div></div></div>",
+        f"<div class='mm-result-pair'>{winners_html}</div></div></div></div>",
         unsafe_allow_html=True,
     )
 
