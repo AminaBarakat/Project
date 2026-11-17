@@ -52,6 +52,8 @@ def show(code, me):
         _redraw_at(tour["round1"]["results_at"] + r1.RESULTS_SECONDS, "Round 2 begins in {}…")
     else:
         _waiting_or_tiebreak(code, me)
+        if rules.is_host(tour, me) and phase == "waiting":
+            _host_controls(code, me)
 
 
 def _load_settled(code, now):
@@ -107,7 +109,7 @@ def _waiting_or_tiebreak(code, me):
     if r1.phase(tour, me, now) == "tiebreak":
         _tiebreak(tour, code, me, now)
     else:
-        _waiting(tour, me, now)
+        _waiting(tour, code, me, now)
 
 
 def _html(markup):
@@ -297,43 +299,87 @@ def _tiebreak(tour, code, me, now):
 
 # --- waiting room --------------------------------------------------------------
 
-_WAITING_ANIMATION = """
-<style>
-.mm-wait { text-align:center; padding: 1.5rem 0 0.5rem; }
-.mm-glass { display:inline-block; font-size:4.5rem; animation: mm-search 2.4s ease-in-out infinite; }
-.mm-prints { font-size:1.4rem; letter-spacing:0.8rem; opacity:0.6; }
-.mm-prints span { animation: mm-fade 2.4s infinite; }
-.mm-prints span:nth-child(2) { animation-delay: .4s } .mm-prints span:nth-child(3) { animation-delay: .8s }
-.mm-prints span:nth-child(4) { animation-delay: 1.2s } .mm-prints span:nth-child(5) { animation-delay: 1.6s }
-@keyframes mm-search { 0%,100% { transform: translateX(-70px) rotate(-12deg); }
-                       50% { transform: translateX(70px) rotate(12deg); } }
-@keyframes mm-fade { 0%,100% { opacity: .15 } 50% { opacity: 1 } }
-</style>
-<div class="mm-wait">
-  <div class="mm-glass">{GLASS}</div>
-  <div class="mm-prints">{PRINTS}</div>
-</div>
-"""
 
 
-def _waiting(tour, me, now):
+def _waiting(tour, code, me, now):
     _html(art.heading("solutions", "Case file closed", size=44, level=1))
     st.markdown(f"You finished all four games in **{r1.total_seconds(tour, me)}s**. "
                 "The verdict comes when every detective is done…")
-    # Static HTML only: no player names in here, so nothing typed by a player gets in.
-    print_ = art.icon("escape_route", 26)
-    _html(_WAITING_ANIMATION.replace("{GLASS}", art.icon("solutions", 90))
-                            .replace("{PRINTS}", "".join(f"<span>{print_}</span>" for _ in range(5))))
+    _race_track(tour, code, me, now)
     _html(f"<p style='text-align:center'><em>{WAITING_LINES[int(now / 3) % len(WAITING_LINES)]}</em></p>")
-
     done = r1.finished_count(tour)
     total = len(tour["round1"]["players"])
-    st.progress(done / total, text=f"{done} of {total} detectives have finished")
+    st.caption(f"{done} of {total} detectives have finished")
+
+
+def _race_track(tour, code, me, now):
+    """Everyone on one track, sliding forward as they get through their games.
+    Shows how far along each detective is, never whether they were right."""
+    last_key = _key(code, "race_last")
+    last = st.session_state.get(last_key, {})
+    runners, now_positions = [], {}
+    for player in tour["players"]:
+        pid = player["id"]
+        if pid not in tour["round1"]["players"]:
+            continue
+        position = r1.progress(tour, pid, now)
+        now_positions[pid] = position
+        name = player["name"] + (" (left)" if r1.has_left(tour, pid) else "")
+        runners.append({"name": name, "from": last.get(pid, position), "to": position,
+                        "me": pid == me, "done": r1.is_done(tour, pid)})
+    st.session_state[last_key] = now_positions
+    _html(art.race_track(runners, uid=f"{int(now * 10)}"))
+
+
+@st.fragment
+def _host_controls(code, me):
+    """Only the host sees this, once their own games are done. Drawn once and only
+    redrawn when the host taps something, so the buttons don't get lost."""
+    now = time.time()
+    tour = storage.load(code)
+    if tour is None or tour["status"] != "round1":
+        return
+    still_playing = [p for p in tour["players"] if p["id"] in tour["round1"]["players"]
+                     and not r1.is_done(tour, p["id"])
+                     and tour["round1"]["results"][r1.duel_index(tour, p["id"])] is None]
+    confirm_key = _key(code, "host_confirm")
+    confirm = st.session_state.get(confirm_key)
+
+    st.divider()
+    _html(art.heading("rules", "Host controls", size=28, level=4))
+    st.caption("Only you can see this. Use it if someone has left, or to stop waiting for the timers.")
+
+    for player in still_playing:
+        left, right = _grid(f"host_{player['id']}", 2)
+        left.markdown(f"{common.player_label(player)} is still playing")
+        if confirm == ("left", player["id"]):
+            if right.button("Yes, they left", key=f"left_yes_{player['id']}", type="primary", width="stretch"):
+                storage.update(code, r1.player_left, me, player["id"], time.time())
+                st.session_state[confirm_key] = None
+                st.rerun()
+        elif right.button("Left the game", key=f"left_{player['id']}", width="stretch"):
+            st.session_state[confirm_key] = ("left", player["id"])
+            st.rerun(scope="fragment")
+
+    if confirm == ("end",):
+        st.warning("End Round 1 now? Every unfinished game counts as not answered.")
+        yes, no = _grid("host_end_confirm", 2)
+        if yes.button("Yes, end it", key="end_yes", type="primary", width="stretch"):
+            storage.update(code, r1.end_round_now, me, time.time())
+            st.session_state[confirm_key] = None
+            st.rerun()
+        if no.button("Cancel", key="end_no", width="stretch"):
+            st.session_state[confirm_key] = None
+            st.rerun(scope="fragment")
+    elif st.button("End the round now", key="end_round", width="stretch"):
+        st.session_state[confirm_key] = ("end",)
+        st.rerun(scope="fragment")
 
 
 # --- results ---------------------------------------------------------------------
 
 _HOW = {"more right answers": "more right answers", "faster": "faster",
+        "opponent left": "opponent left the game",
         "tie-breaker": "won the tie-breaker", "tie-breaker speed": "faster on the tie-breaker",
         "draw": "decided by a draw"}
 

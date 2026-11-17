@@ -220,8 +220,23 @@ def room(name):
 
 # --- Pattern Wall tiles ----------------------------------------------------------
 
-def _shape(shape, colour, cx, cy, r):
-    fill = TILE_COLOURS[colour]
+# Each colour also has its own texture, so the tiles can be told apart without
+# relying on colour alone (colour-blind players): dots on purple, stripes on royal
+# blue, fine lines on ice blue; silver stays plain.
+TEXTURES = (
+    '<defs>'
+    '<pattern id="tx-purple" width="9" height="9" patternUnits="userSpaceOnUse">'
+    '<circle cx="4.5" cy="4.5" r="1.9" fill="#1d1438" opacity=".55"/></pattern>'
+    '<pattern id="tx-royal" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">'
+    '<rect width="3.2" height="9" fill="#ffffff" opacity=".38"/></pattern>'
+    '<pattern id="tx-ice" width="9" height="6" patternUnits="userSpaceOnUse">'
+    '<rect width="9" height="1.8" fill="#1d1438" opacity=".5"/></pattern>'
+    '</defs>'
+)
+_TEXTURED = {"purple", "royal", "ice"}
+
+
+def _shape_outline(shape, cx, cy, r, fill):
     if shape == "circle":
         return f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="{fill}"/>'
     if shape == "square":
@@ -233,8 +248,17 @@ def _shape(shape, colour, cx, cy, r):
     raise ValueError(shape)
 
 
+def _shape(shape, colour, cx, cy, r):
+    """A coloured shape, with its colour's texture on top. The SVG it goes into
+    must include TEXTURES."""
+    drawn = _shape_outline(shape, cx, cy, r, TILE_COLOURS[colour])
+    if colour in _TEXTURED:
+        drawn += _shape_outline(shape, cx, cy, r, f"url(#tx-{colour})")
+    return drawn
+
+
 def tile(shape, colour):
-    return _svg(_shape(shape, colour, 50, 50, 28))
+    return _svg(TEXTURES + _shape(shape, colour, 50, 50, 28))
 
 
 def wall(grid):
@@ -253,7 +277,7 @@ def wall(grid):
                              f'repeatCount="indefinite"/></text>')
             else:
                 parts.append(_shape(value[0], value[1], x + 50, y + 50, 26))
-    return _svg("".join(parts), size=size)
+    return _svg(TEXTURES + "".join(parts), size=size)
 
 
 # --- Number Lock padlock ---------------------------------------------------------
@@ -435,3 +459,60 @@ def banner(icon_name, text, good=True):
             f'border:2px solid {edge};border-radius:14px;padding:.7rem 1rem;margin:.4rem 0 1rem;'
             f'color:{IVORY};font-size:1.15rem;font-weight:700;box-shadow:0 0 18px {edge}55">'
             f'{icon(icon_name, 40)}<span>{text}</span></div>')
+
+
+# --- The race track in the waiting room ------------------------------------------------
+
+def race_track(runners, uid, games=4):
+    """One animated track with every player as a token.
+
+    runners: list of dicts {"name", "from", "to", "me", "done"}, where "from"/"to"
+    are positions between 0 and `games` (the token slides from one to the other).
+    Names are player input, so they are HTML-escaped here."""
+    import html as _html
+
+    def x(pos):                       # 0 … games  →  5% … 88% across the track
+        return round(5 + 83 * max(0.0, min(games, pos)) / games, 2)
+
+    styles, tokens = [], []
+    for k, r in enumerate(runners):
+        name = _html.escape(r["name"][:12])
+        initial = _html.escape(r["name"][:1].upper() or "?")
+        above = k % 2 == 0
+        anim = f"mm-run-{uid}-{k}"
+        styles.append(f"@keyframes {anim} {{ from {{ left: {x(r['from'])}%; }} to {{ left: {x(r['to'])}%; }} }}")
+        ring = TILE_COLOURS["ice"] if r["me"] else SILVER
+        fill = TILE_COLOURS["silver"] if r["done"] else PURPLE
+        label = "You" if r["me"] else name
+        glow = f"box-shadow:0 0 12px {TILE_COLOURS['ice']};" if r["me"] else ""
+        tokens.append(
+            f'<div style="position:absolute;top:{14 if above else 52}px;left:{x(r["to"])}%;'
+            f'transform:translateX(-50%);animation:{anim} .9s ease-out;text-align:center;z-index:{20 if r["me"] else 10}">'
+            + (f'<div style="font-size:.7rem;color:{IVORY};white-space:nowrap;margin-bottom:2px;font-weight:{700 if r["me"] else 400}">{label}</div>' if above else "")
+            + f'<div style="width:26px;height:26px;border-radius:50%;background:{fill};border:2.5px solid {ring};{glow}'
+              f'display:flex;align-items:center;justify-content:center;color:{BG};font-weight:800;font-size:.8rem;margin:auto">{initial}</div>'
+            + (f'<div style="font-size:.7rem;color:{IVORY};white-space:nowrap;margin-top:2px;font-weight:{700 if r["me"] else 400}">{label}</div>' if not above else "")
+            + "</div>")
+
+    # small dividers between the games, a START label and the finish flag past the end
+    checkpoints = "".join(
+        f'<div style="position:absolute;top:43px;left:{x(g)}%;width:2px;height:18px;'
+        f'background:{SILVER};opacity:.55"></div>' for g in range(1, games))
+    checkpoints += (f'<div style="position:absolute;top:40px;left:0;font-size:.6rem;letter-spacing:.08em;'
+                    f'color:{SILVER};opacity:.8">START</div>')
+    flag = f'<div style="position:absolute;top:26px;left:92%">{icon("finish", 34)}</div>'
+    return f"""<style>
+{chr(10).join(styles)}
+@keyframes mm-shimmer-{uid} {{ from {{ background-position: 0 0; }} to {{ background-position: 200px 0; }} }}
+</style>
+<div style="position:relative;height:110px;margin:1rem 0 .4rem">
+  <div style="position:absolute;top:47px;left:5%;right:10%;height:10px;border-radius:5px;
+       background:repeating-linear-gradient(90deg,{TILE_COLOURS['purple']}55 0 20px,{TILE_COLOURS['ice']}55 20px 40px);
+       animation:mm-shimmer-{uid} 3s linear infinite;border:1px solid {SILVER}66"></div>
+  {checkpoints}{flag}{"".join(tokens)}
+</div>"""
+
+
+ICONS["finish"] = f'''<path d="M26 90 V14" stroke="{SILVER}" stroke-width="5" stroke-linecap="round"/>
+    <path d="M28 16 H80 L70 32 L80 48 H28 Z" fill="{SILVER}"/>
+    <path d="M28 16 H41 V32 H28 Z M54 16 H67 V32 H54 Z M41 32 H54 V48 H41 Z M67 32 H76 L80 48 H67 Z" fill="{BG}"/>'''
