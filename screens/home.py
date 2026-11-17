@@ -22,10 +22,11 @@ def show():
 def show_create():
     with st.form("create"):
         name = st.text_input("Your name", max_chars=rules.MAX_NAME_LENGTH)
+        appearance = common.avatar_picker("create_avatar")
         st.caption(f"You'll be the host and one of the {rules.MAX_PLAYERS} players.")
         submitted = st.form_submit_button("Create tournament", type="primary")
     if submitted:
-        tour, host_id, message = storage.create(name)
+        tour, host_id, message = storage.create(name, appearance=appearance)
         if tour is None:
             st.error(message)
         else:
@@ -40,10 +41,11 @@ def show_join(prefilled_code=""):
         code = st.text_input("Code", value=prefilled_code, max_chars=storage.CODE_LENGTH,
                              placeholder="e.g. KQZT")
         name = st.text_input("Your name", max_chars=rules.MAX_NAME_LENGTH)
+        appearance = common.avatar_picker("join_avatar")
         submitted = st.form_submit_button("Join", type="primary")
     if submitted:
         player_id = storage.new_player_id()
-        tour, message = storage.update(code, rules.join, player_id, name)
+        tour, message = storage.update(code, rules.join, player_id, name, appearance)
         if tour is not None and rules.find_player(tour, player_id):
             common.flash("success", message)
             common.go_to(tour["code"], player_id)

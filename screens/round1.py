@@ -133,7 +133,8 @@ def _intro(tour, me):
     st.title("Round 1: the duels")
     opponent = rules.opponent_of(tour, me)
     you = rules.find_player(tour, me)
-    st.markdown(f"## {common.player_label(you)}  ⚔️  {common.player_label(opponent)}")
+    st.markdown("### Your first suspect is… your opponent.")
+    st.markdown(common.duel_card(you, opponent), unsafe_allow_html=True)
     order = r1.order_of(tour, me)
     st.markdown("**Your four games:** " + "  →  ".join(r1.GAMES[g] for g in order))
     st.caption(f"{r1.GAME_SECONDS} seconds and one try per game. Most right answers wins; "
@@ -336,20 +337,20 @@ _HOW = {"more right answers": "more right answers", "faster": "faster",
 
 
 def _results(tour, me):
-    st.title("Round 1 results")
+    st.title("Which detectives made it out?")
     if me in tour["eliminated"]:
         st.error("💀 You've been eliminated. Stay and watch the rest of the game!")
     else:
         st.success("🎉 You're through to Round 2!")
 
+    cards = []
     for number, result in enumerate(tour["round1"]["results"], start=1):
         w, l = result["winner"], result["loser"]
         winner = rules.find_player(tour, w)
         loser = rules.find_player(tour, l)
-        st.markdown(
-            f"**Duel {number}** · {_HOW[result['decided_by']]}  \n"
-            f"✅ {common.player_label(winner)} ({result['points'][w]}/4, {result['seconds'][w]}s)  vs  "
-            f"~~{common.player_label(loser)}~~ ({result['points'][l]}/4, {result['seconds'][l]}s) · ELIMINATED"
-        )
+        detail = (f" · {result['points'][w]}/4 in {result['seconds'][w]}s · "
+                  f"{_HOW[result['decided_by']]}")
+        cards.append(common.result_duel_card(number, winner, loser, detail))
+    st.markdown("<div class='mm-results-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
 
     st.divider()
