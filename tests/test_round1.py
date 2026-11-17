@@ -397,7 +397,7 @@ def test_results_come_as_soon_as_everyone_is_done_without_waiting_for_timers():
     assert sorted(tour["eliminated"]) == sorted(losers)
 
 
-def test_results_move_on_to_round2_after_8_seconds():
+def test_results_move_on_to_round2_after_the_results_time():
     tour = everyone_done()
     at = tour["round1"]["results_at"]
     early, _ = r1.settle(tour, at + r1.RESULTS_SECONDS - 1)

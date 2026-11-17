@@ -5,7 +5,7 @@ games, one after another, in the same order. Each duel starts with a different
 game, so no two duels look the same. Every game has its own 60-second timer and
 one try. As soon as you answer, your next game starts: nobody waits for a timer.
 
-    intro (5 s) → game 1 → game 2 → game 3 → game 4 → [tie-breaker] → results (8 s) → Round 2
+    intro (5 s) → game 1 → game 2 → game 3 → game 4 → [tie-breaker] → results (10 s) → Round 2
 
 Who wins a duel:
     - more right answers                        → wins
@@ -33,7 +33,7 @@ import random
 INTRO_SECONDS = 5
 GAME_SECONDS = 60
 TIEBREAK_SECONDS = 30
-RESULTS_SECONDS = 8
+RESULTS_SECONDS = 10        # time to read the results and the solutions
 MEMORY_SHOW_SECONDS = 7      # the memory items are shown for the first 7 s of that game
 
 # --- the four games -------------------------------------------------------------

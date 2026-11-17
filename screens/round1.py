@@ -120,6 +120,18 @@ def _key(code, name):
     return f"r1_{code}_{name}"
 
 
+def _grid(name, count):
+    """`count` columns that stay side by side on phones too.
+
+    Normally Streamlit stacks columns on top of each other on narrow screens,
+    which turns 4 tiles into a long list you have to scroll. This keeps them
+    in one row (they just get smaller)."""
+    key = art.css_key(f"grid_{name}")
+    _html(art.phone_grid_style(key))
+    with st.container(key=key):
+        return st.columns(count)
+
+
 def _picture_button(key, svg, label, height=120, selected=False, bob=False):
     """A drawing you tap directly. Returns True when tapped."""
     key = art.css_key(key)        # e.g. "Clock Room" → "Clock_Room", safe as a CSS class
@@ -184,19 +196,27 @@ def _number_lock(code, me, number):
     for guess, clue in r1.NUMBER_LOCK_CLUES:
         st.markdown(f"`{guess}`  {clue}")
 
-    digits = st.session_state.setdefault(_key(code, f"dials_{number}"), ["0", "0", "0", "0"])
-    _html(art.img(art.padlock(digits), width="220px"))
+    typed_key = _key(code, f"typed_{number}")
+    typed = st.session_state.setdefault(typed_key, "")
+    shown = list(typed) + ["_"] * (4 - len(typed))
+    _html(art.img(art.padlock(shown), width="200px"))
 
-    columns = st.columns(4)
-    for k, column in enumerate(columns):
-        if column.button("▲", key=f"dial_up_{number}_{k}", width="stretch"):
-            digits[k] = str((int(digits[k]) + 1) % 10)
-            st.rerun(scope="fragment")
-        if column.button("▼", key=f"dial_down_{number}_{k}", width="stretch"):
-            digits[k] = str((int(digits[k]) - 1) % 10)
-            st.rerun(scope="fragment")
-    if st.button("🔓 Unlock", type="primary", width="stretch"):
-        _submit(code, me, number, "".join(digits))
+    # A phone-style keypad: 1-9, then ⌫ 0 🔓
+    rows = [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], ["⌫", "0", "🔓"]]
+    for r, row in enumerate(rows):
+        for column, key in zip(_grid(f"keypad_{number}_{r}", 3), row):
+            if key == "🔓":
+                if column.button("🔓 Unlock", key=f"unlock_{number}", type="primary",
+                                 width="stretch", disabled=len(typed) != 4):
+                    _submit(code, me, number, typed)
+            elif key == "⌫":
+                if column.button("⌫", key=f"back_{number}", width="stretch", disabled=not typed):
+                    st.session_state[typed_key] = typed[:-1]
+                    st.rerun(scope="fragment")
+            elif column.button(key, key=f"digit_{number}_{key}", width="stretch",
+                               disabled=len(typed) == 4):
+                st.session_state[typed_key] = typed + key
+                st.rerun(scope="fragment")
 
 
 def _pattern(code, me, number):
@@ -206,7 +226,7 @@ def _pattern(code, me, number):
 
     picked_key = _key(code, f"pattern_{number}")
     picked = st.session_state.get(picked_key)
-    columns = st.columns(4)
+    columns = _grid(f"pattern_{number}", 4)
     for column, (option, (shape, colour)) in zip(columns, r1.PATTERN_OPTIONS.items()):
         with column:
             chosen = option == picked
@@ -230,7 +250,7 @@ def _escape_route(code, me, number):
     st.caption("Tap a door to go through it. There's no going back.")
 
     doors = r1.ESCAPE_MAP[here]
-    columns = st.columns(len(doors))
+    columns = _grid(f"doors_{number}_{art.css_key(here)}", len(doors))
     for column, room in zip(columns, doors):
         with column:
             if _picture_button(f"door_{number}_{here}_{room}", art.room(room), room, height=130):
@@ -257,9 +277,9 @@ def _memory(tour, code, me, number, now):
 
     picked_key = _key(code, f"memory_{number}")
     picked = st.session_state.setdefault(picked_key, [])
-    columns = st.columns(5)
+    rows = [_grid(f"memory_{number}_{r}", 5) for r in range(2)]
     for k, name in enumerate(r1.MEMORY_ITEMS):
-        with columns[k % 5]:
+        with rows[k // 5][k % 5]:
             chosen = name in picked
             if _picture_button(f"memory_{number}_{k}", art.item(name),
                                f"✓ {name}" if chosen else name, height=110, selected=chosen):
@@ -354,3 +374,20 @@ def _results(tour, me):
     st.markdown("<div class='mm-results-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
 
     st.divider()
+    _solutions()
+
+
+def _solutions():
+    """Round 1 is over, so everyone gets to see what the answers were."""
+    with st.expander("🔎 The solutions", expanded=True):
+        shape, colour = r1.PATTERN_OPTIONS[r1.PATTERN_ANSWER]
+        st.markdown(f"**🔐 Number Lock:** the code was **{r1.NUMBER_LOCK_ANSWER}**.")
+        left, right = _grid("solution_pattern", 2)
+        colour_name = {"royal": "royal blue", "ice": "ice blue"}.get(colour, colour)
+        left.markdown(f"**🧩 Pattern Wall:** tile **{r1.PATTERN_ANSWER}**, the {colour_name} {shape}.")
+        with right:
+            _html(art.img(art.tile(shape, colour), width="70px"))
+        st.markdown("**🗺️ Escape Route:** " + " → ".join(["Start"] + r1.ESCAPE_ANSWER)
+                    + ". Breakfast, chimes, the piano's guard and the fireplace rule ruled out every other way.")
+        st.markdown("**🃏 Memory Table:** these vanished:")
+        _html(art.row([(art.item(name), name) for name in r1.MEMORY_MISSING], columns=5))
