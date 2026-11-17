@@ -1,0 +1,9 @@
+# The Missing Mastermind always uses its own dark purple look, whatever the
+# phone or laptop is set to. Without this, phones in light mode draw some
+# boxes (pop-up messages, expanders) white while our text stays white.
+[theme]
+base = "dark"
+primaryColor = "#b57bff"
+backgroundColor = "#10071f"
+secondaryBackgroundColor = "#261044"
+textColor = "#f8f2ff"
