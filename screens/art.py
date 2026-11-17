@@ -10,10 +10,10 @@ Nothing here contains text typed by players, so it is safe to show as HTML.
 
 import base64
 
-BG = "#17112a"          # deep purple-black card
-SILVER = "#c9ccd6"      # line-art and borders
-IVORY = "#eceef3"       # light fills
-PURPLE = "#8b5cf6"
+BG = "#1d1438"          # dark purple, used for small details drawn on light parts
+SILVER = "#e4e7ef"      # line-art and borders
+IVORY = "#f4f5f9"       # light fills
+PURPLE = "#a78bfa"
 RED = "#d9534f"
 GREEN = "#5cb85c"
 BLUE = "#4a90d9"
@@ -21,11 +21,30 @@ YELLOW = "#f0c419"
 
 # The four Pattern Wall colours: silver, purple, royal blue and ice blue.
 # Different enough in shade to tell apart, all in the game's theme.
-TILE_COLOURS = {"purple": "#9b5de5", "silver": "#d5d8e0", "royal": "#2f55d4", "ice": "#8fd3ff"}
+TILE_COLOURS = {"purple": "#b57bff", "silver": "#eef0f5", "royal": "#3b6bff", "ice": "#9be4ff"}
+
+
+# The card behind every picture: a purple-to-royal-blue gradient with a soft glow
+# in the middle and a bright silver edge, so the drawing "pops".
+_CARD_PAINT = (
+    '<defs>'
+    '<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">'
+    '<stop offset="0" stop-color="#3a2470"/><stop offset="1" stop-color="#1f2a6e"/></linearGradient>'
+    '<radialGradient id="glow" cx="0.5" cy="0.45" r="0.55">'
+    '<stop offset="0" stop-color="#8f7bff" stop-opacity="0.55"/><stop offset="1" stop-color="#8f7bff" stop-opacity="0"/>'
+    '</radialGradient></defs>'
+)
 
 
 def _svg(body, size=100, background=True):
-    card = f'<rect x="2" y="2" width="{size - 4}" height="{size - 4}" rx="12" fill="{BG}" stroke="{SILVER}" stroke-width="2"/>' if background else ""
+    card = ""
+    if background:
+        r = size * 0.12
+        card = (f'{_CARD_PAINT}'
+                f'<rect x="2" y="2" width="{size - 4}" height="{size - 4}" rx="{r}" fill="url(#bg)"/>'
+                f'<rect x="2" y="2" width="{size - 4}" height="{size - 4}" rx="{r}" fill="url(#glow)"/>'
+                f'<rect x="2" y="2" width="{size - 4}" height="{size - 4}" rx="{r}" fill="none" '
+                f'stroke="{SILVER}" stroke-width="{max(2.5, size / 40)}"/>')
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {size} {size}" width="{size}" height="{size}">'
             f'{card}{body}</svg>')
 
@@ -93,6 +112,19 @@ ITEMS = {
         <circle cx="50" cy="56" r="28" fill="{IVORY}" stroke="{SILVER}" stroke-width="5"/>
         <path d="M50 56 V38 M50 56 L62 62" stroke="{BG}" stroke-width="3.5" stroke-linecap="round"/>
         <circle cx="50" cy="56" r="3" fill="{BG}"/>''',
+    "Hourglass": f'''
+        <rect x="28" y="16" width="44" height="7" rx="3" fill="{SILVER}"/>
+        <rect x="28" y="77" width="44" height="7" rx="3" fill="{SILVER}"/>
+        <path d="M34 23 H66 C 66 40, 52 44, 52 50 C 52 56, 66 60, 66 77 H34 C 34 60, 48 56, 48 50 C 48 44, 34 40, 34 23 Z" fill="none" stroke="{SILVER}" stroke-width="3"/>
+        <path d="M40 30 H60 C 58 40, 52 42, 50 47 C 48 42, 42 40, 40 30 Z" fill="{YELLOW}"/>
+        <path d="M38 75 C 40 66, 46 62, 50 60 C 54 62, 60 66, 62 75 Z" fill="{YELLOW}"/>''',
+    "Lantern": f'''
+        <path d="M42 18 C 42 10, 58 10, 58 18" fill="none" stroke="{SILVER}" stroke-width="3"/>
+        <path d="M34 24 H66 L62 30 H38 Z" fill="{SILVER}"/>
+        <rect x="38" y="30" width="24" height="40" rx="3" fill="{YELLOW}" opacity="0.85"/>
+        <path d="M50 38 C 56 46, 54 54, 50 58 C 46 54, 44 46, 50 38 Z" fill="{RED}"/>
+        <path d="M38 30 V70 M62 30 V70" stroke="{SILVER}" stroke-width="3"/>
+        <path d="M34 70 H66 L62 80 H38 Z" fill="{SILVER}"/>''',
 }
 
 
@@ -113,8 +145,10 @@ ROOMS = {
     "Conservatory": f'''
         <path d="M50 84 V44" stroke="#8b6b3e" stroke-width="5" stroke-linecap="round"/>
         <path d="M50 44 C 36 30, 22 36, 18 44 C 30 40, 40 42, 50 46 C 60 42, 70 40, 82 44 C 78 36, 64 30, 50 44 Z M50 44 C 46 30, 50 20, 58 16 C 56 28, 54 36, 50 44" fill="{GREEN}"/>
-        <ellipse cx="26" cy="80" rx="5" ry="3" fill="{SILVER}"/><ellipse cx="34" cy="74" rx="5" ry="3" fill="{SILVER}"/>
-        <ellipse cx="70" cy="80" rx="5" ry="3" fill="{SILVER}"/><ellipse cx="76" cy="72" rx="5" ry="3" fill="{SILVER}"/>''',
+        <ellipse cx="72" cy="80" rx="14" ry="4" fill="{IVORY}"/>
+        <path d="M64 66 H80 V74 C 80 78, 64 78, 64 74 Z" fill="{IVORY}"/>
+        <path d="M80 68 C 86 68, 86 74, 80 74" fill="none" stroke="{IVORY}" stroke-width="2"/>
+        <path d="M70 62 C 68 58, 72 56, 70 52" fill="none" stroke="{IVORY}" stroke-width="1.5"/>''',
     "Library": f'''
         <rect x="20" y="30" width="10" height="50" fill="{RED}"/><rect x="32" y="24" width="10" height="56" fill="{BLUE}"/>
         <rect x="44" y="34" width="10" height="46" fill="{GREEN}"/><rect x="56" y="26" width="10" height="54" fill="{YELLOW}"/>
@@ -160,6 +194,23 @@ ROOMS = {
         <path d="M30 20 L54 28 V88 L30 82 Z" fill="{IVORY}"/>
         <circle cx="48" cy="56" r="2.5" fill="{BG}"/>
         <path d="M60 52 H84 M76 44 L84 52 L76 60" {_LINE}/>''',
+    "Music Room": f'''
+        <path d="M18 46 C 18 34, 40 30, 60 34 C 74 36, 82 44, 82 52 V58 H18 Z" fill="{IVORY}"/>
+        <rect x="18" y="58" width="64" height="8" fill="{BG}"/>
+        <path d="M22 58 V66 M30 58 V66 M38 58 V66 M46 58 V66 M54 58 V66 M62 58 V66 M70 58 V66 M78 58 V66" stroke="{IVORY}" stroke-width="1.5"/>
+        <path d="M26 66 V84 M74 66 V84" stroke="{SILVER}" stroke-width="4"/>
+        <ellipse cx="34" cy="88" rx="5" ry="2.5" fill="{RED}"/><ellipse cx="46" cy="90" rx="5" ry="2.5" fill="{RED}"/>''',
+    "Chapel": f'''
+        <path d="M50 14 V24 M45 19 H55" stroke="{SILVER}" stroke-width="3"/>
+        <path d="M30 50 L50 26 L70 50 V84 H30 Z" fill="none" stroke="{SILVER}" stroke-width="3"/>
+        <path d="M42 54 C 42 46, 58 46, 58 54 L60 66 H40 Z" fill="{YELLOW}"/>
+        <circle cx="50" cy="69" r="3" fill="{YELLOW}"/>
+        <path d="M22 50 C 18 46, 18 40, 22 36 M78 50 C 82 46, 82 40, 78 36" fill="none" stroke="{IVORY}" stroke-width="2"/>''',
+    "Billiard Room": f'''
+        <rect x="14" y="34" width="72" height="40" rx="6" fill="#2e7d4f" stroke="#8b6b3e" stroke-width="5"/>
+        <circle cx="38" cy="52" r="6" fill="{IVORY}"/><circle cx="58" cy="48" r="6" fill="{RED}"/>
+        <circle cx="66" cy="60" r="6" fill="{YELLOW}"/>
+        <path d="M20 84 L58 54" stroke="{SILVER}" stroke-width="3" stroke-linecap="round"/>''',
 }
 
 
@@ -194,10 +245,12 @@ def wall(grid):
         for j, value in enumerate(line):
             x, y = 10 + j * cell, 10 + i * cell
             parts.append(f'<rect x="{x + 4}" y="{y + 4}" width="{cell - 8}" height="{cell - 8}" rx="10" '
-                         f'fill="#241a3a" stroke="{PURPLE if value is None else "#3a2d57"}" stroke-width="3"/>')
+                         f'fill="#2c2160" fill-opacity="0.75" stroke="{PURPLE if value is None else "#6a5bb0"}" stroke-width="{4 if value is None else 2}"/>')
             if value is None:
                 parts.append(f'<text x="{x + 50}" y="{y + 66}" font-size="46" text-anchor="middle" '
-                             f'fill="{PURPLE}" font-family="Georgia,serif">?</text>')
+                             f'fill="{PURPLE}" font-family="Georgia,serif">?'
+                             f'<animate attributeName="opacity" values="1;0.35;1" dur="1.6s" '
+                             f'repeatCount="indefinite"/></text>')
             else:
                 parts.append(_shape(value[0], value[1], x + 50, y + 50, 26))
     return _svg("".join(parts), size=size)
@@ -217,3 +270,70 @@ def padlock(digits):
             f'<rect x="22" y="96" width="196" height="118" rx="18" fill="{SILVER}" stroke="{PURPLE}" stroke-width="4"/>'
             f'{dials}')
     return _svg(body, size=240, background=False)
+
+
+# --- Pictures you can tap ------------------------------------------------------------
+
+def css_key(key):
+    """Streamlit gives a widget with key "x" the CSS class "st-key-x"."""
+    return "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in key)
+
+
+def picture_button_style(key, svg, height=120, selected=False, bob=False):
+    """CSS that turns the st.button with this key into the picture itself.
+
+    Hovering lifts it and makes it glow; a selected picture glows ice-blue with a
+    silver ring. bob=True makes it float gently up and down to draw the eye.
+
+    The selectors are more specific than the team theme's button style
+    (screens/common.py) and use !important, so pictures win and all other
+    buttons keep the theme."""
+    data = base64.b64encode(svg.encode()).decode()
+    k = css_key(key)
+    b = f".st-key-{k} div.stButton > button"
+    ring = (f"outline:3px solid {TILE_COLOURS['ice']} !important;outline-offset:2px;"
+            f"filter:drop-shadow(0 0 14px {TILE_COLOURS['ice']}) !important;") if selected else ""
+    float_ = "animation:mm-bob 2.6s ease-in-out infinite;" if bob else ""
+    return f"""<style>
+@keyframes mm-bob {{ 0%,100% {{ transform: translateY(0) }} 50% {{ transform: translateY(-5px) }} }}
+{b} {{
+  background: url("data:image/svg+xml;base64,{data}") center 4px / auto {height - 30}px no-repeat transparent !important;
+  border: none !important; border-radius: 14px !important; box-shadow: none !important;
+  min-height: {height}px; padding-top: {height - 34}px !important; width: 100%;
+  transition: transform .15s ease, filter .15s ease; {ring}{float_}
+}}
+{b}:hover {{
+  transform: translateY(-5px) scale(1.05); animation: none;
+  filter: drop-shadow(0 0 12px {PURPLE}) !important;
+}}
+{b}:active {{ transform: scale(0.96); }}
+{b} p {{ font-weight: 600; color: {SILVER} !important; }}
+</style>"""
+
+
+# --- A countdown the browser animates by itself ---------------------------------------
+
+def countdown(uid, seconds, total, label=""):
+    """A number counting down to 0 and a shrinking bar, animated purely with CSS.
+
+    The server draws this once; the browser does the ticking. `uid` must be
+    unique per game so a new game starts a fresh animation."""
+    width = round(100 * seconds / total, 1)
+    return f"""<style>
+@property --mm-n {{ syntax: '<integer>'; inherits: false; initial-value: 0; }}
+@keyframes mm-tick-{uid} {{ from {{ --mm-n: {seconds}; }} to {{ --mm-n: 0; }} }}
+@keyframes mm-bar-{uid} {{ from {{ width: {width}%; }} to {{ width: 0%; }} }}
+.mm-n-{uid} {{ --mm-n: {seconds}; animation: mm-tick-{uid} {seconds}s linear forwards;
+              counter-reset: mm-n var(--mm-n); }}
+.mm-n-{uid}::after {{ content: counter(mm-n) "s"; }}
+.mm-bar-{uid} {{ height: 10px; border-radius: 5px; width: {width}%;
+                background: linear-gradient(90deg, {TILE_COLOURS['ice']}, {TILE_COLOURS['purple']});
+                animation: mm-bar-{uid} {seconds}s linear forwards; }}
+</style>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
+  <span style="color:{SILVER};font-size:.9rem">{label}</span>
+  <span style="font-size:1.7rem;font-weight:700;color:{IVORY}">⏱️ <span class="mm-n-{uid}"></span></span>
+</div>
+<div style="background:rgba(255,255,255,.12);border-radius:5px;margin-bottom:.8rem">
+  <div class="mm-bar-{uid}"></div>
+</div>"""

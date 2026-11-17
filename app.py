@@ -10,6 +10,7 @@ the shared saving in storage.py, and the screens in screens/.
 """
 
 import streamlit as st
+from streamlit.errors import StreamlitSecretNotFoundError
 
 import storage
 import tournament as rules
@@ -25,11 +26,18 @@ common.apply_theme()
 # Cloud, these two values are added in the app's Secrets settings so every
 # visitor uses the same online Supabase database.  Secrets are deliberately
 # not stored in this GitHub repository.
-if "supabase" in st.secrets:
-    storage.configure_supabase(
-        st.secrets["supabase"]["url"],
-        st.secrets["supabase"]["key"],
-    )
+def _supabase_secrets():
+    """The [supabase] secrets, or None when this computer has no secrets file
+    (then we simply use the local SQLite file instead of crashing)."""
+    try:
+        return st.secrets["supabase"] if "supabase" in st.secrets else None
+    except StreamlitSecretNotFoundError:
+        return None
+
+
+supabase = _supabase_secrets()
+if supabase:
+    storage.configure_supabase(supabase["url"], supabase["key"])
 
 code = st.query_params.get("code")
 me = st.query_params.get("me")
