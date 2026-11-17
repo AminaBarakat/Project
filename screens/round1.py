@@ -333,11 +333,6 @@ def _waiting(tour, me, now):
 
 # --- results ---------------------------------------------------------------------
 
-_HOW = {"more right answers": "more right answers", "faster": "faster",
-        "tie-breaker": "won the tie-breaker", "tie-breaker speed": "faster on the tie-breaker",
-        "draw": "decided by a draw"}
-
-
 def _results(tour, me):
     st.title("Which detectives made it out?")
     if me in tour["eliminated"]:
@@ -350,9 +345,7 @@ def _results(tour, me):
         w, l = result["winner"], result["loser"]
         winner = rules.find_player(tour, w)
         loser = rules.find_player(tour, l)
-        detail = (f" · {result['points'][w]}/4 in {result['seconds'][w]}s · "
-                  f"{_HOW[result['decided_by']]}")
-        cards.append(common.result_duel_card(number, winner, loser, detail))
+        cards.append(common.result_duel_card(number, winner, loser))
     st.markdown("<div class='mm-results-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
 
     st.divider()
