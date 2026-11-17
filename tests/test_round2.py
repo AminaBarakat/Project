@@ -61,10 +61,15 @@ def test_round1_results_transition_starts_round2_with_the_four_winners():
                         for winner, loser in zip(winners, losers)],
         },
     }
-    after, _ = round1.settle(tour, NOW + round1.RESULTS_SECONDS, random.Random(4))
+    # Round 2 starts once all four winners have tapped "I'm ready" (not after a countdown).
+    waited, _ = round1.settle(tour, NOW + 60, random.Random(4))
+    assert waited["status"] == "round1_results"
+    after = tour
+    for k, winner in enumerate(winners):
+        after, _ = round1.mark_ready(after, winner, NOW + 1 + k, random.Random(4))
     assert after["status"] == "round2"
     assert set(after["round2"]["players"]) == set(winners)
-    assert after["round2"]["started_at"] == NOW + round1.RESULTS_SECONDS
+    assert after["round2"]["started_at"] == NOW + 4
 
 
 def test_3583_is_accepted_and_both_teammates_see_progress():

@@ -48,8 +48,7 @@ def show(code, me):
         _redraw_when_due(_deadlines(tour, me, now))
         _game(code, me)
     elif phase == "results":
-        _results(tour, me)
-        _redraw_at(tour["round1"]["results_at"] + r1.RESULTS_SECONDS, "Round 2 begins in {}…")
+        _results(code, tour, me)
     else:
         _waiting_or_tiebreak(code, me)
         if rules.is_host(tour, me) and phase == "waiting":
@@ -134,10 +133,10 @@ def _grid(name, count):
         return st.columns(count)
 
 
-def _picture_button(key, svg, label, height=120, selected=False, bob=False):
+def _picture_button(key, svg, label, height=120, selected=False, bob=False, appear=None):
     """A drawing you tap directly. Returns True when tapped."""
     key = art.css_key(key)        # e.g. "Clock Room" → "Clock_Room", safe as a CSS class
-    _html(art.picture_button_style(key, svg, height, selected, bob))
+    _html(art.picture_button_style(key, svg, height, selected, bob, appear))
     return st.button(label, key=key, width="stretch")
 
 
@@ -175,14 +174,23 @@ def _game(code, me):
     _html(art.heading(game, r1.GAMES[game]))
 
     puzzle = r1.puzzle(tour, game)          # the version this tournament drew
-    if game == "number_lock":
-        _number_lock(code, me, number, puzzle)
-    elif game == "pattern":
-        _pattern(code, me, number, puzzle)
-    elif game == "escape_route":
-        _escape_route(code, me, number, puzzle)
-    elif game == "memory":
-        _memory(tour, code, me, number, now, puzzle)
+    draw = {"number_lock": lambda: _number_lock(code, me, number, puzzle),
+            "pattern": lambda: _pattern(code, me, number, puzzle),
+            "escape_route": lambda: _escape_route(code, me, number, puzzle),
+            "memory": lambda: _memory(tour, code, me, number, now, puzzle)}[game]
+    try:
+        draw()
+    except Exception as error:          # never leave a player looking at an empty screen
+        if _is_streamlit_control(error):
+            raise                       # st.rerun() works by raising; let it through
+        st.error("This game couldn't be shown. Please take a screenshot and tell the host.")
+        st.exception(error)
+
+
+def _is_streamlit_control(error):
+    """st.rerun() and st.stop() work by raising special exceptions; those must not be caught."""
+    names = {cls.__name__ for cls in type(error).__mro__}
+    return bool(names & {"RerunException", "StopException", "ScriptControlException"})
 
 
 def _submit(code, me, number, value):
@@ -199,12 +207,19 @@ def _number_lock(code, me, number, puzzle):
     for guess, feedback in puzzle["feedback"].items():
         st.markdown(f"`{guess}`  {r1.clue_text(feedback)}")
 
-    _html(art.img(art.padlock(["?", "?", "?", "?"]), width="190px"))
-    with st.form(_key(code, f"lock_form_{number}"), border=False):
-        typed = st.text_input("Type the 4-digit code", max_chars=4, placeholder="e.g. 1234",
-                              key=_key(code, f"typed_{number}"))
-        if st.form_submit_button("Unlock", type="primary", width="stretch"):
-            _submit(code, me, number, typed)
+    # The padlock: the loop on top is a drawing, the body is a styled container, and
+    # the text box inside it is styled as the four dial windows (screens/art.py).
+    lock_key = art.css_key(f"lock_{number}")
+    _html(art.lock_style(lock_key))
+    _html('<div style="text-align:center;margin-top:.6rem">'
+          + art.img(art.shackle(), width="150px").replace("margin:auto", "margin:0 auto -4px") + "</div>")
+    with st.container(key=lock_key):
+        with st.form(_key(code, f"lock_form_{number}"), border=False):
+            typed = st.text_input("Type the code", max_chars=4, placeholder="····",
+                                  key=_key(code, f"typed_{number}"))
+            unlock = st.form_submit_button("Unlock", type="primary")
+    if unlock:
+        _submit(code, me, number, typed)
 
 
 def _pattern(code, me, number, puzzle):
@@ -232,14 +247,19 @@ def _escape_route(code, me, number, puzzle):
     route_key = _key(code, f"route_{number}")
     route = st.session_state.get(route_key, [])
     here = route[-1] if route else "Start"
-    st.markdown("**Your path:** " + " → ".join(["Start"] + route))
+
+    # Your path so far, and the room you've just stepped into.
+    _html(art.route_trail(route))
+    if route:
+        _html(art.room_entrance(here, puzzle["rooms"][here]))
     st.caption("Tap a door to go through it. There's no going back.")
 
     doors = puzzle["map"][here]
     columns = _grid(f"doors_{number}_{art.css_key(here)}", len(doors))
-    for column, room in zip(columns, doors):
+    for k, (column, room) in enumerate(zip(columns, doors)):
         with column:
-            if _picture_button(f"door_{number}_{here}_{room}", art.room(room), room, height=130):
+            if _picture_button(f"door_{number}_{here}_{room}", art.room(room), room, height=130,
+                               appear=0.15 + 0.18 * k):
                 new_route = route + [room]
                 if room in puzzle["map"]:          # not a dead end yet: keep walking
                     st.session_state[route_key] = new_route
@@ -264,7 +284,7 @@ def _memory(tour, code, me, number, now, puzzle):
     picked_key = _key(code, f"memory_{number}")
     picked = st.session_state.setdefault(picked_key, [])
     rows = [_grid(f"memory_{number}_{r}", 5) for r in range(2)]
-    for k, name in enumerate(r1.MEMORY_ITEMS):
+    for k, name in enumerate(puzzle["options"]):       # 3 vanished, 3 still here, 4 never shown
         with rows[k // 5][k % 5]:
             chosen = name in picked
             if _picture_button(f"memory_{number}_{k}", art.item(name),
@@ -305,6 +325,7 @@ def _waiting(tour, code, me, now):
     _html(art.heading("solutions", "Case file closed", size=44, level=1))
     st.markdown(f"You finished all four games in **{r1.total_seconds(tour, me)}s**. "
                 "The verdict comes when every detective is done…")
+    _html(art.searching_scene())
     _race_track(tour, code, me, now)
     _html(f"<p style='text-align:center'><em>{WAITING_LINES[int(now / 3) % len(WAITING_LINES)]}</em></p>")
     done = r1.finished_count(tour)
@@ -378,12 +399,16 @@ def _host_controls(code, me):
 
 # --- results ---------------------------------------------------------------------
 
-def _results(tour, me):
+def _results(code, tour, me):
     st.title("Which detectives made it out?")
     if me in tour["eliminated"]:
         _html(art.banner("eliminated", "You've been eliminated. Stay and watch the rest of the game!", good=False))
     else:
         _html(art.banner("through", "You're through to Round 2!"))
+
+    # Round 2 starts when the four detectives going through are all ready.
+    _ready_board(code, me)
+    _ready_buttons(code, me)
 
     cards = []
     for number, result in enumerate(tour["round1"]["results"], start=1):
@@ -395,6 +420,56 @@ def _results(tour, me):
 
     st.divider()
     _scoreboard(tour, me)
+
+
+@st.fragment(run_every="1s")
+def _ready_board(code, me):
+    """Who is ready for Round 2. Checks every second; when Round 2 begins, the whole
+    page moves on. No buttons in here, so taps can't get lost in the refresh."""
+    tour = storage.load(code)
+    if tour is None or tour["status"] != "round1_results":
+        st.rerun()
+    ready = set(r1.ready_players(tour))
+    chips = []
+    for pid in r1.advancing(tour):
+        player = rules.find_player(tour, pid)
+        name = "You" if pid == me else player["name"]
+        chips.append((name, pid in ready, pid == me))
+    _html(art.ready_chips(chips))
+
+
+@st.fragment
+def _ready_buttons(code, me):
+    """The "I'm ready" button (players going through) and the host's override.
+    Drawn once and redrawn only when tapped."""
+    tour = storage.load(code)
+    if tour is None or tour["status"] != "round1_results":
+        return
+    going = r1.advancing(tour)
+    if me in going and me not in r1.ready_players(tour):
+        if st.button("I'm ready for Round 2", key="ready_r2", type="primary", width="stretch"):
+            storage.update(code, r1.mark_ready, me, time.time())
+            st.rerun()
+    elif me in going:
+        st.caption("You're ready. Waiting for the other detectives…")
+    else:
+        st.caption("The four detectives going through are getting ready for Round 2…")
+
+    if rules.is_host(tour, me):
+        confirm_key = _key(code, "host_start_r2")
+        if st.session_state.get(confirm_key):
+            st.warning("Start Round 2 now, without waiting for everyone to be ready?")
+            yes, no = _grid("host_r2_confirm", 2)
+            if yes.button("Yes, start", key="r2_yes", type="primary", width="stretch"):
+                storage.update(code, r1.start_round2_now, me, time.time())
+                st.session_state[confirm_key] = False
+                st.rerun()
+            if no.button("Cancel", key="r2_no", width="stretch"):
+                st.session_state[confirm_key] = False
+                st.rerun(scope="fragment")
+        elif st.button("Host: start Round 2 now", key="r2_force", width="stretch"):
+            st.session_state[confirm_key] = True
+            st.rerun(scope="fragment")
 
 
 def _scoreboard(tour, me):
