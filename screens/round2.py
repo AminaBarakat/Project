@@ -14,9 +14,10 @@ def show(tour, me):
     if me in tour["eliminated"]:
         st.info("You're out, but you can keep watching.")
     st.subheader("Still in the game")
-    for player in tour["players"]:
-        if player["id"] not in tour["eliminated"]:
-            st.markdown(common.player_label(player))
+    active = [player for player in tour["players"] if player["id"] not in tour["eliminated"]]
+    st.markdown("<div class='mm-lobby-grid'>" + "".join(
+        f"<div class='mm-lobby-card'>{common.profile_card(player)}</div>" for player in active
+    ) + "</div>", unsafe_allow_html=True)
     st.divider()
     st.info("The Duo Vault Challenge is coming soon.")
 
@@ -24,7 +25,6 @@ def show(tour, me):
         st.caption("While Round 2 is being built, the host will choose the two finalists for Round 3.")
         return
 
-    active = [player for player in tour["players"] if player["id"] not in tour["eliminated"]]
     names_to_ids = {player["name"]: player["id"] for player in active}
     st.subheader("Temporary bridge to the finale")
     st.caption("Pick Round 2's two survivors so you can test the Final Mansion Mystery now.")
