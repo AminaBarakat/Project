@@ -51,6 +51,7 @@ def _story_style():
     .r3-speech { background: rgba(12, 5, 27, .82); border: 1px solid rgba(220, 190, 255, .72); border-radius: 17px;
       box-shadow: 0 12px 35px rgba(0, 0, 0, .3), inset 0 0 28px rgba(135, 66, 193, .15); color: #f7eeff;
       font-family: Georgia, serif; font-size: clamp(1.08rem, 2.3vw, 1.34rem); line-height: 1.62; min-height: 210px; padding: 1.4rem 1.55rem; }
+    .r3-typed-text { white-space:pre-wrap; } .r3-typed-char { animation:r3-type .01s steps(1, end) forwards; animation-delay:calc(var(--i) * .035s); opacity:0; }
     .r3-cursor { color: #e6a7ff; animation: r3-blink .75s step-end infinite; }
     .r3-question { color: #fff; font-family: Georgia, serif; font-size: 1.5rem; font-style: italic; line-height: 1.35;
       padding: 1.2rem .3rem .2rem; text-align: center; }
@@ -68,10 +69,16 @@ def _story_style():
     .r3-case-section { color:#e3c9ff; font-family:Cinzel, Georgia, serif; font-size:.9rem; font-weight:800; letter-spacing:.08em; margin:1.25rem 0 .55rem; }
     .r3-case-grid { display:grid; gap:.8rem; grid-template-columns:repeat(3, minmax(0, 1fr)); }
     .r3-case-card { background:rgba(19,8,39,.58); border:1px solid rgba(220,190,255,.38); border-radius:16px; overflow:hidden; padding:.45rem; text-align:center; }
-    .r3-case-card img { background:transparent; border-radius:11px; display:block; height:136px; mix-blend-mode:multiply; object-fit:contain; width:100%; }
+    .r3-case-card img { background:#eee8f3; border-radius:11px; display:block; height:136px; mix-blend-mode:normal; object-fit:contain; width:100%; }
     .r3-case-card span { color:#f8f2ff; display:block; font-family:ui-sans-serif, system-ui, sans-serif; font-weight:800; padding:.45rem .15rem .12rem; }
     .r3-object-card { align-items:center; background:rgba(19,8,39,.58); border:1px solid rgba(220,190,255,.38); border-radius:16px; display:flex; gap:.55rem; justify-content:center; min-height:82px; padding:.6rem; }
     .r3-object-card b { color:#f8f2ff; font-family:ui-sans-serif, system-ui, sans-serif; }
+    .r3-solution-grid { display:grid; gap:.8rem; grid-template-columns:repeat(3, minmax(0, 1fr)); margin:1rem 0 1.35rem; }
+    .r3-solution-card { background:rgba(39, 26, 77, .68); border:1px solid rgba(191,225,255,.52); border-radius:16px; overflow:hidden; padding:.5rem; text-align:center; }
+    .r3-solution-card img { background:#eee8f3; border-radius:11px; display:block; height:138px; object-fit:contain; width:100%; }
+    .r3-solution-kind { color:#d9c2ec; font-size:.72rem; font-weight:800; letter-spacing:.1em; margin-top:.55rem; text-transform:uppercase; }
+    .r3-solution-value { color:#fff; font-family:ui-sans-serif, system-ui, sans-serif; font-size:1.08rem; font-weight:850; padding:.15rem 0 .25rem; }
+    .r3-solution-icon { align-items:center; background:rgba(238,232,243,.9); border-radius:11px; display:flex; font-size:4.2rem; height:138px; justify-content:center; }
     .r3-choice-label { color:#f8f2ff; font-family:ui-sans-serif, system-ui, sans-serif; font-size:1rem; font-weight:800; margin:.9rem 0 .35rem; }
     .r3-choice-help { color:#d9c2ec; font-size:.88rem; margin-bottom:.55rem; }
     .r3-podium { align-items:end; display:flex; gap:clamp(.55rem, 3vw, 1.4rem); justify-content:center; margin:1.7rem 0 2rem; min-height:300px; }
@@ -84,18 +91,26 @@ def _story_style():
     .r3-place-one img { filter:drop-shadow(0 0 10px #fff3a2); height:104px; width:104px; }
     .r3-confetti { height:0; position:relative; z-index:3; } .r3-confetti i { animation:r3-confetti 2.8s linear infinite; background:var(--c); display:block; height:10px; left:var(--x); position:absolute; top:-10px; transform:rotate(20deg); width:6px; }
     @keyframes r3-confetti { 0% { opacity:0; transform:translateY(-20px) rotate(0deg) } 12% { opacity:1 } 100% { opacity:0; transform:translateY(260px) rotate(520deg) } }
-    @media (max-width: 620px) { .r3-case-grid { grid-template-columns:1fr; } .r3-case-card img { height:175px; } }
+    @media (max-width: 620px) { .r3-case-grid, .r3-solution-grid { grid-template-columns:1fr; } .r3-case-card img { height:175px; } }
     @media (max-width: 520px) { .r3-podium { gap:.35rem; } .r3-place { width:31vw; padding:.55rem .25rem; } .r3-place img { height:58px; width:58px; } .r3-place-one img { height:76px; width:76px; } .r3-place-name { font-size:.78rem; } }
     @media (max-width: 620px) { .r3-scene { grid-template-columns: 1fr; gap: 0; padding: .2rem 1rem 0; }
       .r3-detective { width: 180px; margin-bottom: -1rem; } .r3-speech { min-height: 170px; } }
     @keyframes r3-bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-7px) } }
     @keyframes r3-talk { from { transform: scaleY(.55) } to { transform: scaleY(1.6) } }
+    @keyframes r3-type { to { opacity:1 } }
     @keyframes r3-blink { 50% { opacity: 0 } }
     </style>
     """, unsafe_allow_html=True)
 
 
 def show(code, me):
+    # Keep the briefing in one browser render: the character animation can then
+    # progress smoothly instead of restarting in the live timer fragment.
+    tour = storage.load(code)
+    if tour and tour["status"] == "round3" and tour["round3"].get("starts_at") is None:
+        _story_style()
+        _story(tour, code, me, time.time())
+        return
     _live_round(code, me)
 
 
@@ -119,7 +134,7 @@ def _live_round(code, me):
 
 
 def _story(tour, code, me, now):
-    text = html.escape(r3.story_text(tour, now)).replace("\n", "<br>")
+    text = _typed_story()
     profiles = _finalist_profiles(tour)
     st.markdown(f"""
     <div class="r3-story">
@@ -133,18 +148,26 @@ def _story(tour, code, me, now):
     </div>
     """, unsafe_allow_html=True)
 
-    if not r3.story_finished(tour, now):
-        st.caption("The detective is briefing the finalists…")
-        return
-
     st.markdown(f"<div class='r3-question'>{r3.FINAL_QUESTION}</div>", unsafe_allow_html=True)
     if r3.is_finalist(tour, me):
         if st.button("Open the final case", type="primary", width="stretch"):
             _, message = storage.update(code, r3.start_investigation, me, time.time())
-            st.toast(message)
-            st.rerun(scope="app")
+            if "briefing is still" in message:
+                st.info(message)
+            else:
+                st.toast(message)
+                st.rerun()
     else:
         st.info("The finalists will open the final case when they are ready.")
+
+
+def _typed_story():
+    """Full story rendered once; CSS reveals the letters one at a time."""
+    characters = "".join(
+        f"<span class='r3-typed-char' style='--i:{number}'>{html.escape(character)}</span>"
+        for number, character in enumerate(r3.STORY)
+    )
+    return f"<span class='r3-typed-text'>{characters}</span>"
 
 
 def _finalist_profiles(tour):
@@ -248,9 +271,22 @@ def _results(tour, me):
         st.success(f"🏆 {common.player_label(winner)} is the Mastermind champion!")
 
     st.subheader("Solution")
-    st.markdown("- **Thief:** Nova\n- **Hiding place:** Conservatory\n- **Object:** Map")
+    st.markdown(_solution_cards(), unsafe_allow_html=True)
     st.info("Portrait number for Nova: **3** · Conservatory room: **1** · Map clue: **8**  \n### Final vault code: `318`")
     st.caption(f"Winner decided by: {state['decided_by']}.")
+
+
+def _solution_cards():
+    """A visual recap makes the final reveal match the case-file style."""
+    items = (("Thief", "Nova", CASE_IMAGES["Nova"], ""),
+             ("Hiding place", "Conservatory", CASE_IMAGES["Conservatory"], ""),
+             ("Object", "Map", None, "🗺️"))
+    cards = []
+    for kind, value, path, icon in items:
+        visual = (f"<img src='{_image_data_url(path)}' alt='{value}'>" if path else
+                  f"<div class='r3-solution-icon' aria-label='{value}'>{icon}</div>")
+        cards.append(f"<div class='r3-solution-card'>{visual}<div class='r3-solution-kind'>{kind}</div><div class='r3-solution-value'>{value}</div></div>")
+    return "<div class='r3-solution-grid'>" + "".join(cards) + "</div>"
 
 
 def _podium(tour, winner):

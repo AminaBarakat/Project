@@ -92,6 +92,9 @@ def join(tournament, player_id, name, appearance=None):
     taken = {p["name"].casefold() for p in tournament["players"]}
     if name.casefold() in taken:
         return tournament, f"Someone is already called {name}. Pick another name."
+    claimed_portraits = {p.get("appearance") for p in tournament["players"]}
+    if appearance and appearance in claimed_portraits:
+        return tournament, "That detective portrait has already been claimed. Choose another one."
 
     new = copy.deepcopy(tournament)
     new["players"].append({"id": player_id, "name": name, "appearance": appearance})

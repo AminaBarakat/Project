@@ -69,6 +69,14 @@ def test_join_refuses_duplicate_name_ignoring_capitals_and_spaces():
     assert tour == before
 
 
+def test_join_refuses_an_already_claimed_detective_portrait():
+    tour, _ = t.new_tournament("ABCD", "p0", "Ana", appearance="girl_emerald")
+    before = copy.deepcopy(tour)
+    assert_refused(before, t.join(tour, "p1", "Bruno", appearance="girl_emerald"))
+    joined, _ = t.join(tour, "p1", "Bruno", appearance="boy_royal")
+    assert joined["players"][1]["appearance"] == "boy_royal"
+
+
 def test_join_refuses_empty_and_too_long_names():
     tour = lobby_with(2)
     before = copy.deepcopy(tour)
