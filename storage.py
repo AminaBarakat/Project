@@ -106,16 +106,16 @@ class _SupabaseStore:
 
 
 def configure_supabase(url, key):
-    """Use an online Supabase project for the default app storage.
+    """Use Supabase through the configured key from Streamlit secrets.
 
-    `url` and `key` come from Streamlit secrets, never from code committed to
-    GitHub.  The key is Supabase's public anon key, never the service-role key.
+    The app sends rendered, player-specific screens to browsers; it never sends
+    this credential or raw tournament JSON. Database access stays server-side.
     """
     global _supabase
     if not isinstance(url, str) or not url.startswith("https://"):
         raise ValueError("The Supabase URL must start with https://")
     if not isinstance(key, str) or not key.strip():
-        raise ValueError("The Supabase anon key is missing.")
+        raise ValueError("The Supabase key is missing.")
     _supabase = _SupabaseStore(url, key)
 
 

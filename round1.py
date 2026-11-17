@@ -30,6 +30,8 @@ tournament["status"] and tournament["eliminated"]; it never imports tournament.p
 import copy
 import random
 
+import round2 as duo_round
+
 INTRO_SECONDS = 5
 GAME_SECONDS = 60
 TIEBREAK_SECONDS = 30
@@ -384,6 +386,8 @@ def settle(tour, now, rng=None):
 
     elif now >= r1["results_at"] + RESULTS_SECONDS:
         new["status"] = "round2"
+        finalists = [result["winner"] for result in r1["results"]]
+        new["round2"] = duo_round.new_round(finalists, now, rng)
 
     if new == tour:
         return tour, ""
