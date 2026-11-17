@@ -9,7 +9,7 @@ A tournament looks like this:
 
     {
         "code": "KQZT",                 # the join code players type in
-        "status": "lobby",              # "lobby" → "round1" → "round1_results" → "round2"
+        "status": "lobby",              # lobby → round1 → round1_results → round2 → final → round3 → finished
         "host_id": "p_3f9a...",         # the player who created it; only they can start
         "players": [                    # in the order they joined; the host is first
             {"id": "p_3f9a...", "name": "Ana", "appearance": None},
@@ -17,6 +17,7 @@ A tournament looks like this:
         "duels": [],                    # filled in at start: [[id, id], [id, id], ...]
         "eliminated": [],               # ids, in the order they were knocked out
         "round1": None,                 # Round 1's own state, see round1.py
+        "round2": None,                 # Round 2's shared state, see round2.py
     }
 
 "appearance" is empty for now. It's the slot for avatars/colours when we do styling.
@@ -59,6 +60,7 @@ def new_tournament(code, host_id, host_name, appearance=None):
         "duels": [],
         "eliminated": [],
         "round1": None,
+        "round2": None,
         "round3": None,
     }
     return tournament, f"Tournament {code} created. Share the code with your friends!"
@@ -171,21 +173,32 @@ def opponent_of(tournament, player_id):
 
 
 def start_round3(tournament, by_id, finalist_ids, now=None):
-    """The host picks Round 2's two survivors and begins the final mystery.
+    """Start Round 3 with the Round 2 winners.
 
-    Round 2 is currently a presentation placeholder, so this is a temporary
-    bridge until its Duo Vault rules decide the finalists automatically.
+    A finalist can start after a completed Duo Vault Challenge. The host-only
+    Round 2 path remains for old tournaments created by the temporary placeholder.
     """
-    if not is_host(tournament, by_id):
-        return tournament, "Only the host can start the final mystery."
-    if tournament["status"] != "round2":
+    if tournament["status"] == "final":
+        round_state = tournament.get("round2") or {}
+        winner = round_state.get("winner")
+        winning_duo = (round_state.get("duos") or {}).get(winner)
+        expected = winning_duo.get("players", []) if winning_duo else []
+        if by_id not in expected:
+            return tournament, "Only a player from the winning duo can start the final mystery."
+        if (not isinstance(finalist_ids, list) or len(finalist_ids) != 2
+                or set(finalist_ids) != set(expected)):
+            return tournament, "The final must include both players from the winning duo."
+    elif tournament["status"] == "round2":
+        if not is_host(tournament, by_id):
+            return tournament, "Only the host can start the final mystery."
+        if not isinstance(finalist_ids, list) or len(finalist_ids) != 2 or len(set(finalist_ids)) != 2:
+            return tournament, "Choose exactly two different finalists."
+        active_ids = {player["id"] for player in tournament["players"]
+                      if player["id"] not in tournament.get("eliminated", [])}
+        if not set(finalist_ids).issubset(active_ids):
+            return tournament, "Both finalists must still be in the game."
+    else:
         return tournament, "Round 3 can only start after Round 2."
-    if not isinstance(finalist_ids, list) or len(finalist_ids) != 2 or len(set(finalist_ids)) != 2:
-        return tournament, "Choose exactly two different finalists."
-    active_ids = {player["id"] for player in tournament["players"]
-                  if player["id"] not in tournament.get("eliminated", [])}
-    if not set(finalist_ids).issubset(active_ids):
-        return tournament, "Both finalists must still be in the game."
 
     new = copy.deepcopy(tournament)
     new["status"] = "round3"
