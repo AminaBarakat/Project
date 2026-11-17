@@ -5,7 +5,7 @@ games, one after another, in the same order. Each duel starts with a different
 game, so no two duels look the same. Every game has its own 60-second timer and
 one try. As soon as you answer, your next game starts: nobody waits for a timer.
 
-    intro (5 s) → game 1 → game 2 → game 3 → game 4 → [tie-breaker] → results (10 s) → Round 2
+    intro (5 s) → game 1 → game 2 → game 3 → game 4 → [tie-breaker] → results → everyone ready → Round 2
 
 Who wins a duel:
     - more right answers                        → wins
@@ -20,7 +20,7 @@ instead of waiting.
 
 Nobody's phone is in charge of the clock. Every phone regularly calls `settle()`,
 which applies whatever is due: moving a player on when a game's time runs out,
-deciding duels, starting tie-breakers, showing results, moving on to Round 2.
+deciding duels, starting tie-breakers, showing results.
 Doing it twice changes nothing, so it doesn't matter which phone gets there first.
 
 This module only looks at tournament["duels"], tournament["round1"],
@@ -35,7 +35,7 @@ import round2 as duo_round
 INTRO_SECONDS = 5
 GAME_SECONDS = 60
 TIEBREAK_SECONDS = 30
-RESULTS_SECONDS = 10        # time to read the results and the solutions
+RESULTS_SECONDS = 10        # (no longer used to move on: Round 2 starts when everyone is ready)
 MEMORY_SHOW_SECONDS = 7      # the memory items are shown for the first 7 s of that game
 
 # --- the four games -------------------------------------------------------------
@@ -65,6 +65,7 @@ ESCAPE_CLUES = [
 
 MEMORY_ITEMS = ["Key", "Compass", "Rose", "Coin", "Feather",
                 "Chess piece", "Candle", "Pocket watch", "Hourglass", "Lantern"]
+MEMORY_DECOYS = ["Ring", "Teacup", "Spectacles", "Dice", "Umbrella", "Envelope"]   # never shown first
 
 PUZZLES = {
     "number_lock": [
@@ -295,16 +296,23 @@ PUZZLES = {
          "answer": ["Conservatory", "Gallery", "Library", "Billiard Room", "Exit"]},
     ],
     "memory": [
+        # "options" are the 10 objects players pick from: the 3 that vanished, 3 that
+        # are still on the table, and 4 decoys that were never shown at all.
         {"missing": ["Compass", "Candle", "Hourglass"],
-         "remaining": ["Lantern", "Feather", "Coin", "Pocket watch", "Key", "Chess piece", "Rose"]},
+         "remaining": ["Lantern", "Feather", "Coin", "Pocket watch", "Key", "Chess piece", "Rose"],
+         "options": ["Ring", "Compass", "Lantern", "Umbrella", "Candle", "Key", "Teacup", "Hourglass", "Coin", "Spectacles"]},
         {"missing": ["Rose", "Key", "Pocket watch"],
-         "remaining": ["Hourglass", "Coin", "Candle", "Lantern", "Compass", "Feather", "Chess piece"]},
+         "remaining": ["Hourglass", "Coin", "Candle", "Lantern", "Compass", "Feather", "Chess piece"],
+         "options": ["Spectacles", "Ring", "Hourglass", "Coin", "Key", "Pocket watch", "Compass", "Umbrella", "Rose", "Envelope"]},
         {"missing": ["Feather", "Coin", "Lantern"],
-         "remaining": ["Pocket watch", "Rose", "Chess piece", "Key", "Hourglass", "Candle", "Compass"]},
+         "remaining": ["Pocket watch", "Rose", "Chess piece", "Key", "Hourglass", "Candle", "Compass"],
+         "options": ["Hourglass", "Ring", "Feather", "Envelope", "Coin", "Chess piece", "Lantern", "Key", "Umbrella", "Spectacles"]},
         {"missing": ["Chess piece", "Compass", "Rose"],
-         "remaining": ["Candle", "Key", "Lantern", "Hourglass", "Feather", "Pocket watch", "Coin"]},
+         "remaining": ["Candle", "Key", "Lantern", "Hourglass", "Feather", "Pocket watch", "Coin"],
+         "options": ["Chess piece", "Compass", "Pocket watch", "Envelope", "Rose", "Hourglass", "Lantern", "Dice", "Umbrella", "Ring"]},
         {"missing": ["Hourglass", "Pocket watch", "Feather"],
-         "remaining": ["Coin", "Lantern", "Compass", "Rose", "Candle", "Key", "Chess piece"]},
+         "remaining": ["Coin", "Lantern", "Compass", "Rose", "Candle", "Key", "Chess piece"],
+         "options": ["Feather", "Chess piece", "Hourglass", "Coin", "Teacup", "Ring", "Candle", "Umbrella", "Pocket watch", "Envelope"]},
     ],
 }
 
@@ -354,11 +362,11 @@ def check(game, value, puzzle):
         return "right" if value == puzzle["answer"] else "wrong"
 
     if game == "memory":
-        # Exactly three different items, picked from the ten.
+        # Exactly three different objects, picked from this version's ten options.
         count = len(puzzle["missing"])
         if not isinstance(value, list) or len(value) != count:
             return "invalid"
-        names = {item.casefold(): item for item in MEMORY_ITEMS}
+        names = {item.casefold(): item for item in puzzle["options"]}
         picked = {names.get(v.strip().casefold()) if isinstance(v, str) else None for v in value}
         if None in picked or len(picked) != count:
             return "invalid"
@@ -662,14 +670,54 @@ def settle(tour, now, rng=None):
             r1["results_at"] = now
             new["eliminated"] = new.get("eliminated", []) + [r["loser"] for r in r1["results"]]
 
-    elif now >= r1["results_at"] + RESULTS_SECONDS:
-        new["status"] = "round2"
-        finalists = [result["winner"] for result in r1["results"]]
-        new["round2"] = duo_round.new_round(finalists, now, rng)
+    # (Round 2 no longer starts by itself: see mark_ready and start_round2_now.)
 
     if new == tour:
         return tour, ""
     return new, "Updated."
+
+
+# --- getting ready for Round 2 ---------------------------------------------------------
+
+def advancing(tour):
+    """The four players going through to Round 2, in duel order."""
+    return [result["winner"] for result in tour["round1"]["results"] if result]
+
+
+def ready_players(tour):
+    return list(tour["round1"].get("ready", []))
+
+
+def _begin_round2(tour, now, rng):
+    tour["status"] = "round2"
+    tour["round2"] = duo_round.new_round(advancing(tour), now, rng)
+
+
+def mark_ready(tour, player_id, now, rng=None):
+    """A player going through taps "I'm ready". When all four are ready, Round 2 starts."""
+    if tour["status"] != "round1_results":
+        return tour, "Round 2 isn't waiting for players right now."
+    if player_id not in advancing(tour):
+        return tour, "Only the detectives going through to Round 2 need to get ready."
+    if player_id in ready_players(tour):
+        return tour, "You're already ready."
+    new = copy.deepcopy(tour)
+    new["round1"].setdefault("ready", []).append(player_id)
+    if set(new["round1"]["ready"]) >= set(advancing(new)):
+        _begin_round2(new, now, rng)
+        return new, "Everyone is ready. Round 2 begins!"
+    return new, "Ready!"
+
+
+def start_round2_now(tour, by_id, now, rng=None):
+    """The host starts Round 2 without waiting for everyone to tap "I'm ready"."""
+    if tour.get("host_id") != by_id:
+        return tour, "Only the host can do that."
+    if tour["status"] != "round1_results":
+        return tour, "Round 2 can only start from the Round 1 results."
+    new = copy.deepcopy(tour)
+    _begin_round2(new, now, rng)
+    return new, "Round 2 begins!"
 
 
 def _decide_duel(tour, i, a, b, now, rng):

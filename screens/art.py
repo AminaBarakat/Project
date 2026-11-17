@@ -125,6 +125,30 @@ ITEMS = {
         <path d="M50 38 C 56 46, 54 54, 50 58 C 46 54, 44 46, 50 38 Z" fill="{RED}"/>
         <path d="M38 30 V70 M62 30 V70" stroke="{SILVER}" stroke-width="3"/>
         <path d="M34 70 H66 L62 80 H38 Z" fill="{SILVER}"/>''',
+    # Decoys: objects that are never on the table, only among the answers to pick from.
+    "Ring": f'''
+        <circle cx="50" cy="58" r="22" fill="none" stroke="{YELLOW}" stroke-width="8"/>
+        <path d="M40 34 L50 18 L60 34 Z" fill="{TILE_COLOURS['ice']}" stroke="{SILVER}" stroke-width="2"/>''',
+    "Teacup": f'''
+        <path d="M24 40 H70 V58 C 70 72, 58 78, 47 78 C 36 78, 24 72, 24 58 Z" fill="{IVORY}"/>
+        <path d="M70 46 C 84 46, 84 64, 70 64" fill="none" stroke="{IVORY}" stroke-width="5"/>
+        <ellipse cx="47" cy="84" rx="30" ry="5" fill="{SILVER}"/>
+        <path d="M38 32 C 34 26, 42 22, 38 16 M54 32 C 50 26, 58 22, 54 16" fill="none" stroke="{IVORY}" stroke-width="2.5" stroke-linecap="round"/>''',
+    "Spectacles": f'''
+        <circle cx="32" cy="54" r="15" fill="{TILE_COLOURS['ice']}" fill-opacity=".25" stroke="{SILVER}" stroke-width="5"/>
+        <circle cx="68" cy="54" r="15" fill="{TILE_COLOURS['ice']}" fill-opacity=".25" stroke="{SILVER}" stroke-width="5"/>
+        <path d="M47 52 C 50 48, 50 48, 53 52 M17 50 L10 40 M83 50 L90 40" fill="none" stroke="{SILVER}" stroke-width="5" stroke-linecap="round"/>''',
+    "Dice": f'''
+        <rect x="24" y="24" width="52" height="52" rx="10" fill="{IVORY}" transform="rotate(-8 50 50)"/>
+        <g fill="{BG}" transform="rotate(-8 50 50)"><circle cx="37" cy="37" r="5"/><circle cx="50" cy="50" r="5"/>
+        <circle cx="63" cy="63" r="5"/><circle cx="63" cy="37" r="5"/><circle cx="37" cy="63" r="5"/></g>''',
+    "Umbrella": f'''
+        <path d="M14 50 C 14 26, 86 26, 86 50 C 80 44, 74 44, 68 50 C 62 44, 56 44, 50 50 C 44 44, 38 44, 32 50 C 26 44, 20 44, 14 50 Z" fill="{RED}"/>
+        <path d="M50 26 V20 M50 50 V78 C 50 86, 40 86, 40 78" fill="none" stroke="{SILVER}" stroke-width="5" stroke-linecap="round"/>''',
+    "Envelope": f'''
+        <rect x="18" y="30" width="64" height="44" rx="4" fill="{IVORY}"/>
+        <path d="M18 32 L50 56 L82 32" fill="none" stroke="{SILVER}" stroke-width="4" stroke-linejoin="round"/>
+        <circle cx="50" cy="58" r="7" fill="{RED}"/>''',
 }
 
 
@@ -303,7 +327,7 @@ def css_key(key):
     return "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in key)
 
 
-def picture_button_style(key, svg, height=120, selected=False, bob=False):
+def picture_button_style(key, svg, height=120, selected=False, bob=False, appear=None):
     """CSS that turns the st.button with this key into the picture itself.
 
     Hovering lifts it and makes it glow; a selected picture glows ice-blue with a
@@ -318,8 +342,11 @@ def picture_button_style(key, svg, height=120, selected=False, bob=False):
     ring = (f"outline:3px solid {TILE_COLOURS['ice']} !important;outline-offset:2px;"
             f"filter:drop-shadow(0 0 14px {TILE_COLOURS['ice']}) !important;") if selected else ""
     float_ = "animation:mm-bob 2.6s ease-in-out infinite;" if bob else ""
+    if appear is not None:      # slide up into place, `appear` seconds after the screen is drawn
+        float_ = f"animation:mm-appear .55s ease-out {appear:.2f}s both;"
     return f"""<style>
 @keyframes mm-bob {{ 0%,100% {{ transform: translateY(0) }} 50% {{ transform: translateY(-5px) }} }}
+@keyframes mm-appear {{ from {{ opacity: 0; transform: translateY(22px) scale(.92) }} to {{ opacity: 1; transform: none }} }}
 {b} {{
   background: url("data:image/svg+xml;base64,{data}") center 4px / min(calc(100% - 6px), {height - 30}px) auto no-repeat transparent !important;
   border: none !important; border-radius: 14px !important; box-shadow: none !important;
@@ -468,30 +495,50 @@ def race_track(runners, uid, games=4):
 
     runners: list of dicts {"name", "from", "to", "me", "done"}, where "from"/"to"
     are positions between 0 and `games` (the token slides from one to the other).
-    Names are player input, so they are HTML-escaped here."""
+    Players at (almost) the same spot are grouped: their tokens sit side by side and
+    share one label, so names never pile up. Names are HTML-escaped here."""
     import html as _html
 
     def x(pos):                       # 0 … games  →  5% … 88% across the track
         return round(5 + 83 * max(0.0, min(games, pos)) / games, 2)
 
+    # Group runners whose positions are close together.
+    ordered = sorted(runners, key=lambda r: r["to"])
+    groups = []
+    for r in ordered:
+        if groups and abs(r["to"] - groups[-1][-1]["to"]) < 0.22:
+            groups[-1].append(r)
+        else:
+            groups.append([r])
+
     styles, tokens = [], []
-    for k, r in enumerate(runners):
-        name = _html.escape(r["name"][:12])
-        initial = _html.escape(r["name"][:1].upper() or "?")
-        above = k % 2 == 0
-        anim = f"mm-run-{uid}-{k}"
-        styles.append(f"@keyframes {anim} {{ from {{ left: {x(r['from'])}%; }} to {{ left: {x(r['to'])}%; }} }}")
-        ring = TILE_COLOURS["ice"] if r["me"] else SILVER
-        fill = TILE_COLOURS["silver"] if r["done"] else PURPLE
-        label = "You" if r["me"] else name
-        glow = f"box-shadow:0 0 12px {TILE_COLOURS['ice']};" if r["me"] else ""
+    for g, group in enumerate(groups):
+        above = g % 2 == 0
+        names = ["You" if r["me"] else _html.escape(r["name"][:10]) for r in group]
+        label = ", ".join(names[:3]) + (f" +{len(names) - 3}" if len(names) > 3 else "")
+        has_me = any(r["me"] for r in group)
+        anchor = sum(r["to"] for r in group) / len(group)
+        start = sum(r["from"] for r in group) / len(group)
+        anim = f"mm-run-{uid}-{g}"
+        styles.append(f"@keyframes {anim} {{ from {{ left: {x(start)}%; }} to {{ left: {x(anchor)}%; }} }}")
+        circles = ""
+        for r in group:
+            ring = TILE_COLOURS["ice"] if r["me"] else SILVER
+            fill = TILE_COLOURS["silver"] if r["done"] else PURPLE
+            glow = f"box-shadow:0 0 12px {TILE_COLOURS['ice']};" if r["me"] else ""
+            initial = _html.escape((r["name"][:1] or "?").upper())
+            circles += (f'<div style="width:24px;height:24px;border-radius:50%;background:{fill};'
+                        f'border:2.5px solid {ring};{glow}display:flex;align-items:center;justify-content:center;'
+                        f'color:{BG};font-weight:800;font-size:.75rem;margin-left:-6px">{initial}</div>')
+        label_html = (f'<div style="font-size:.7rem;color:{IVORY};white-space:nowrap;'
+                      f'font-weight:{700 if has_me else 400};margin:2px 0">{label}</div>')
         tokens.append(
-            f'<div style="position:absolute;top:{14 if above else 52}px;left:{x(r["to"])}%;'
-            f'transform:translateX(-50%);animation:{anim} .9s ease-out;text-align:center;z-index:{20 if r["me"] else 10}">'
-            + (f'<div style="font-size:.7rem;color:{IVORY};white-space:nowrap;margin-bottom:2px;font-weight:{700 if r["me"] else 400}">{label}</div>' if above else "")
-            + f'<div style="width:26px;height:26px;border-radius:50%;background:{fill};border:2.5px solid {ring};{glow}'
-              f'display:flex;align-items:center;justify-content:center;color:{BG};font-weight:800;font-size:.8rem;margin:auto">{initial}</div>'
-            + (f'<div style="font-size:.7rem;color:{IVORY};white-space:nowrap;margin-top:2px;font-weight:{700 if r["me"] else 400}">{label}</div>' if not above else "")
+            f'<div style="position:absolute;top:{12 if above else 50}px;left:{x(anchor)}%;'
+            f'transform:translateX(-50%);animation:{anim} .9s ease-out;text-align:center;'
+            f'z-index:{20 if has_me else 10}">'
+            + (label_html if above else "")
+            + f'<div style="display:flex;justify-content:center;padding-left:6px">{circles}</div>'
+            + ("" if above else label_html)
             + "</div>")
 
     # small dividers between the games, a START label and the finish flag past the end
@@ -557,3 +604,135 @@ def scoreboard(rows, game_ids):
             f'<thead><tr style="border-bottom:1px solid {SILVER}55"><th style="text-align:left;padding:.4rem .5rem">Detective</th>'
             f'{head}<th>Score</th><th style="text-align:right;padding:.4rem .5rem">Time</th></tr></thead>'
             f'<tbody>{"".join(body)}</tbody></table></div>')
+
+
+# --- The searching detective (waiting room) -----------------------------------------------
+
+ICONS["footprint"] = f'''<path d="M38 20 C 26 22, 24 44, 30 58 C 34 66, 46 66, 48 56 C 50 44, 50 18, 38 20 Z" fill="{SILVER}"/>
+    <ellipse cx="40" cy="78" rx="9" ry="11" fill="{SILVER}"/>
+    <path d="M66 30 C 56 32, 54 52, 60 64 C 64 72, 76 70, 77 60 C 78 48, 78 28, 66 30 Z" fill="{SILVER}" opacity=".75"/>
+    <ellipse cx="70" cy="84" rx="8" ry="9" fill="{SILVER}" opacity=".75"/>'''
+
+
+def searching_scene():
+    """A magnifying glass sweeping back and forth over a trail of footprints that
+    fade in and out. Pure CSS animation; no player text in here."""
+    prints = "".join(
+        f'<span style="display:inline-block;animation:mm-fade 2.4s {k * 0.4:.1f}s infinite;'
+        f'transform:rotate({-8 if k % 2 else 8}deg) translateY({-6 if k % 2 else 6}px)">{icon("footprint", 30)}</span>'
+        for k in range(6))
+    return f"""<style>
+@keyframes mm-search {{ 0%,100% {{ transform: translateX(-90px) rotate(-14deg); }}
+                       50% {{ transform: translateX(90px) rotate(14deg); }} }}
+@keyframes mm-fade {{ 0%,100% {{ opacity: .12 }} 50% {{ opacity: 1 }} }}
+</style>
+<div style="text-align:center;padding:.6rem 0 0">
+  <div style="display:inline-block;animation:mm-search 3s ease-in-out infinite">{icon("solutions", 84)}</div>
+  <div style="margin-top:-.4rem;letter-spacing:.6rem">{prints}</div>
+</div>"""
+
+
+# --- The padlock you type into ------------------------------------------------------------
+
+def shackle():
+    """The top of the padlock (the metal loop), drawn above the typing area."""
+    body = (f'<path d="M70 118 V70 C 70 22, 170 22, 170 70 V118" fill="none" stroke="#8e93a3" stroke-width="18" stroke-linecap="round"/>'
+            f'<path d="M70 118 V70 C 70 22, 170 22, 170 70 V118" fill="none" stroke="{SILVER}" stroke-width="6" opacity=".6"/>')
+    return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 120" width="240" height="120">{body}</svg>'
+
+
+def lock_style(key):
+    """CSS that turns the container with this key into the padlock's body, and the
+    text box inside it into four dial windows: the digits you type appear right in
+    the windows. Overrides the team theme's pale input boxes inside the lock only."""
+    k = css_key(key)
+    c = f".st-key-{k}"
+    # Courier New digits are exactly 0.6em wide; each window is 1.2em wide and the
+    # pitch (window + gap) is 1.5em, matched by letter-spacing 0.9em.
+    windows = (f"repeating-linear-gradient(90deg, {IVORY} 0 1.2em, transparent 1.2em 1.5em)")
+    return f"""<style>
+{c} {{ background: linear-gradient(160deg, {SILVER}, #aeb3c2) !important; border: 4px solid {PURPLE} !important;
+      border-radius: 22px !important; padding: 1.1rem .8rem .9rem !important; max-width: 300px; margin: -6px auto 0 !important;
+      box-shadow: 0 0 22px {PURPLE}55; }}
+{c} [data-baseweb="input"], {c} [data-baseweb="input"] > div, {c} [data-baseweb="base-input"] {{
+      background: transparent !important; border: none !important; box-shadow: none !important; }}
+{c} input {{
+      font-family: "Courier New", Courier, monospace !important; font-size: 2.2rem !important; font-weight: 700 !important;
+      letter-spacing: .9em !important; color: {BG} !important; -webkit-text-fill-color: {BG} !important;
+      caret-color: {PURPLE} !important; text-align: left !important;
+      width: 5.85em !important; padding: .15em 0 .15em .3em !important; margin: 0 auto !important; display: block;
+      background: {windows} !important; border-radius: 6px; }}
+{c} input::placeholder {{ color: #9aa0b0 !important; -webkit-text-fill-color: #9aa0b0 !important; opacity: 1 !important; }}
+{c} div.stFormSubmitButton > button {{ width: 100%; margin-top: .6rem; }}
+{c} [data-testid="stWidgetLabel"], {c} label {{ color: {BG} !important; font-weight: 700; justify-content: center; }}
+</style>"""
+
+
+# --- Escape Route: the trail so far and the room you just walked into ----------------------
+
+def route_trail(rooms):
+    """Your path so far as a row of little room pictures joined by a 'marching'
+    dotted line; the room you're in now glows. Room names are our own text."""
+    start = icon("escape_route", 34)
+    stops = [("Start", start)] + [(room, img(room_svg(room), "40px")) for room in rooms]
+    parts = []
+    for k, (name, picture) in enumerate(stops):
+        here = k == len(stops) - 1
+        glow = (f"filter:drop-shadow(0 0 10px {TILE_COLOURS['ice']});animation:mm-pulse 1.6s ease-in-out infinite;"
+                if here else "opacity:.8;")
+        parts.append(f'<div style="text-align:center;min-width:46px;{glow}">{picture}'
+                     f'<div style="font-size:.62rem;color:{IVORY};margin-top:2px;white-space:nowrap">{name}</div></div>')
+        if not here:
+            parts.append('<div class="mm-march" style="flex:1 1 18px;min-width:14px;height:4px;margin-bottom:16px"></div>')
+    return f"""<style>
+@keyframes mm-march {{ from {{ background-position: 0 0 }} to {{ background-position: 24px 0 }} }}
+@keyframes mm-pulse {{ 0%,100% {{ transform: scale(1) }} 50% {{ transform: scale(1.08) }} }}
+.mm-march {{ background: repeating-linear-gradient(90deg, {PURPLE} 0 8px, transparent 8px 12px);
+            animation: mm-march .8s linear infinite; border-radius: 2px; }}
+</style>
+<div style="display:flex;align-items:center;gap:4px;overflow-x:auto;padding:.4rem .2rem .2rem;margin-bottom:.4rem">
+{"".join(parts)}</div>"""
+
+
+def room_svg(name):
+    return room(name)
+
+
+def room_entrance(name, text):
+    """The room you just entered swings open like a door. `name` and `text` are
+    our own room names and descriptions, never player input."""
+    return f"""<style>
+@keyframes mm-swing {{ 0% {{ transform: perspective(500px) rotateY(-85deg); opacity: .2 }}
+                       70% {{ transform: perspective(500px) rotateY(8deg); opacity: 1 }}
+                       100% {{ transform: perspective(500px) rotateY(0) }} }}
+</style>
+<div style="display:flex;align-items:center;gap:.8rem;background:rgba(29,20,56,.85);border:1.5px solid {SILVER}88;
+     border-radius:14px;padding:.6rem .8rem;margin:.2rem 0 .8rem">
+  <div style="width:74px;transform-origin:left center;animation:mm-swing .9s ease-out both">{img(room(name), "74px")}</div>
+  <div style="color:{IVORY}"><div style="font-size:.75rem;color:{SILVER};letter-spacing:.06em">YOU ARE IN</div>
+       <div style="font-weight:800;font-size:1.1rem">{name}</div>
+       <div style="font-size:.85rem;font-style:italic;opacity:.9">{text}</div></div>
+</div>"""
+
+
+# --- Ready check before Round 2 ----------------------------------------------------------
+
+def ready_chips(chips):
+    """One chip per detective going through: ready (ice-blue, ✓) or still getting ready
+    (silver, pulsing dots). chips: list of (name, is_ready, is_me). Names are escaped."""
+    import html as _html
+    parts = []
+    for name, is_ready, is_me in chips:
+        edge = TILE_COLOURS["ice"] if is_ready else SILVER + "88"
+        mark = icon("mark_right", 18) if is_ready else '<span class="mm-dots"><i>.</i><i>.</i><i>.</i></span>'
+        parts.append(f'<div style="display:flex;align-items:center;gap:.35rem;padding:.35rem .7rem;border-radius:999px;'
+                     f'border:2px solid {edge};background:rgba(29,20,56,.85);color:{IVORY};font-weight:{800 if is_me else 600};'
+                     f'{"box-shadow:0 0 12px " + TILE_COLOURS["ice"] + "88;" if is_ready else ""}">'
+                     f'{mark}<span>{_html.escape(name)}</span></div>')
+    return f"""<style>
+@keyframes mm-dot {{ 0%,100% {{ opacity:.2 }} 50% {{ opacity:1 }} }}
+.mm-dots i {{ font-style:normal;font-weight:900;animation:mm-dot 1.2s infinite }}
+.mm-dots i:nth-child(2) {{ animation-delay:.2s }} .mm-dots i:nth-child(3) {{ animation-delay:.4s }}
+</style>
+<div style="font-size:.8rem;color:{SILVER};letter-spacing:.06em;margin:.2rem 0 .4rem">READY FOR ROUND 2</div>
+<div style="display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.8rem">{"".join(parts)}</div>"""
