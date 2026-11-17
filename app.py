@@ -37,7 +37,13 @@ def _supabase_secrets():
 
 supabase = _supabase_secrets()
 if supabase:
-    storage.configure_supabase(supabase["url"], supabase["key"])
+    if "key" not in supabase:
+        st.error("Add key to the [supabase] secrets.")
+        st.stop()
+    storage.configure_supabase(
+        supabase["url"],
+        supabase["key"],
+    )
 
 code = st.query_params.get("code")
 me = st.query_params.get("me")
@@ -72,7 +78,9 @@ if tour["status"] == "lobby":
     lobby.show(tour["code"], me)
 elif tour["status"] in ("round1", "round1_results"):
     round1_screen.show(tour["code"], me)
+elif tour["status"] in ("round2", "final"):
+    round2_screen.show(tour["code"], me)
 elif tour["status"] in ("round3", "round3_results", "finished"):
     round3_screen.show(tour["code"], me)
 else:
-    round2_screen.show(tour, me)
+    st.error("This tournament is in an unknown game phase.")

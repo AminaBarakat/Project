@@ -8,15 +8,15 @@ create table if not exists public.tournaments (
     created_at timestamptz not null default now()
 );
 
--- This is a no-account party game. Anyone with the app link can read and join
--- its lobbies, so the browser may use the public anon key for these actions.
+-- Tournament JSON includes private Round 2 duo/card assignments. Only the
+-- Streamlit server may read it, using its service_role key from Streamlit secrets.
 alter table public.tournaments enable row level security;
 
-create policy "party players can read tournaments"
-on public.tournaments for select to anon using (true);
+-- Remove the old open policies if this script is being applied to an existing project.
+drop policy if exists "party players can read tournaments" on public.tournaments;
+drop policy if exists "party players can create tournaments" on public.tournaments;
+drop policy if exists "party players can update tournaments" on public.tournaments;
 
-create policy "party players can create tournaments"
-on public.tournaments for insert to anon with check (true);
-
-create policy "party players can update tournaments"
-on public.tournaments for update to anon using (true) with check (true);
+-- The service_role connection is server-side and bypasses RLS. Anonymous and
+-- authenticated browser clients have no table policies and cannot read/write rows.
+revoke all on public.tournaments from anon, authenticated;
