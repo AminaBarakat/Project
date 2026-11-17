@@ -482,6 +482,23 @@ def finished_count(tour):
     return sum(1 for pid in tour["round1"]["players"] if is_done(tour, pid))
 
 
+def progress(tour, player_id, now):
+    """How far along this player is, from 0 (just started) to 4 (all four games done).
+
+    Between answers it creeps forward with the clock, so the race track moves
+    smoothly. It says nothing about right or wrong."""
+    done = game_number(tour, player_id)
+    if done >= len(GAMES):
+        return float(len(GAMES))
+    started = tour["round1"]["players"][player_id]["game_started_at"]
+    into_game = max(0.0, min(0.95, (now - started) / GAME_SECONDS))
+    return done + into_game
+
+
+def has_left(tour, player_id):
+    return player_id in tour["round1"].get("left", [])
+
+
 def points(tour, player_id):
     """How many games this player got right."""
     return sum(1 for r in tour["round1"]["players"][player_id]["results"] if r["correct"])
@@ -563,6 +580,61 @@ def answer_tiebreak(tour, player_id, value, now, rng=None):
     return new, "Answer locked in!"
 
 
+def _close_remaining_games(player, now):
+    """Count every game this player hasn't answered as not answered, ending now."""
+    while len(player["results"]) < len(GAMES):
+        seconds = round(max(0.0, min(GAME_SECONDS, now - player["game_started_at"])), 1)
+        player["results"].append({"correct": False, "seconds": seconds, "timed_out": True})
+        player["game_started_at"] = now
+
+
+def player_left(tour, by_id, player_id, now, rng=None):
+    """The host marks a player who has left the game (closed their phone, lost signal…).
+    They are out, and their opponent goes through."""
+    if tour.get("host_id") != by_id:
+        return tour, "Only the host can do that."
+    if tour["status"] != "round1":
+        return tour, "That's only possible during Round 1."
+    if player_id not in tour["round1"]["players"]:
+        return tour, "That player isn't in this round."
+    if player_id == by_id:
+        return tour, "You can't mark yourself as gone."
+    if has_left(tour, player_id):
+        return tour, "That player is already marked as gone."
+    i = duel_index(tour, player_id)
+    if tour["round1"]["results"][i] is not None:
+        return tour, "That duel is already decided."
+
+    new = copy.deepcopy(tour)
+    new["round1"].setdefault("left", []).append(player_id)
+    _close_remaining_games(new["round1"]["players"][player_id], now)
+    new, _ = settle(new, now, rng)
+    return new, "Marked as gone; their opponent goes through."
+
+
+def end_round_now(tour, by_id, now, rng=None):
+    """The host ends Round 1 early: every unfinished game is closed as not answered."""
+    if tour.get("host_id") != by_id:
+        return tour, "Only the host can do that."
+    if tour["status"] != "round1":
+        return tour, "Round 1 isn't being played right now."
+    if now < tour["round1"]["starts_at"]:
+        return tour, "Round 1 hasn't started yet."
+
+    new = copy.deepcopy(tour)
+    for player in new["round1"]["players"].values():
+        _close_remaining_games(player, now)
+    new, _ = settle(new, now, rng)            # this may open tie-breakers for drawn duels…
+    if new["status"] == "round1":
+        # …so close every open tie-breaker straight away: whoever answered counts,
+        # otherwise it's a draw. Nobody waits.
+        new = copy.deepcopy(new)
+        for tiebreak in new["round1"]["tiebreaks"].values():
+            tiebreak["started_at"] = min(tiebreak["started_at"], now - TIEBREAK_SECONDS)
+        new, _ = settle(new, now, rng)
+    return new, "Round 1 ended."
+
+
 def settle(tour, now, rng=None):
     """Applies everything that is due at time `now`. Safe to call as often as you like."""
     if tour["status"] not in ("round1", "round1_results"):
@@ -598,6 +670,16 @@ def settle(tour, now, rng=None):
 
 def _decide_duel(tour, i, a, b, now, rng):
     r1 = tour["round1"]
+    gone = [pid for pid in (a, b) if has_left(tour, pid)]
+    if gone:                                          # someone left: the other goes through
+        score = {pid: points(tour, pid) for pid in (a, b)}
+        time = {pid: total_seconds(tour, pid) for pid in (a, b)}
+        if len(gone) == 1:
+            winner = b if gone[0] == a else a
+        else:
+            winner = (rng or random.Random()).choice([a, b])
+        _record(tour, i, winner, a, b, "opponent left", score, time)
+        return
     if not (is_done(tour, a) and is_done(tour, b)):
         return                                        # someone is still playing
 

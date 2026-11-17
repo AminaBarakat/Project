@@ -484,3 +484,79 @@ def test_results_move_on_to_round2_after_the_results_time():
 def test_no_answers_once_results_are_shown():
     tour = everyone_done()
     assert_refused(tour, r1.answer(tour, "p0", 0, "6205", START + THINK))
+
+
+# --- host controls ------------------------------------------------------------------
+
+def test_host_can_mark_a_player_who_left_and_the_opponent_goes_through():
+    tour = started()
+    a, b = next(duel for duel in tour["duels"] if "p0" not in duel)
+    tour, _ = r1.player_left(tour, "p0", a, START + 20)
+    result = tour["round1"]["results"][r1.duel_index(tour, a)]
+    assert result["winner"] == b and result["loser"] == a
+    assert result["decided_by"] == "opponent left"
+    assert r1.is_done(tour, a)
+
+
+def test_only_the_host_can_mark_someone_as_gone():
+    tour = started()
+    a, _ = next(duel for duel in tour["duels"] if "p0" not in duel)
+    other = next(pid for pid in tour["round1"]["players"] if pid not in ("p0", a))
+    assert_refused(tour, r1.player_left(tour, other, a, START + 20))
+
+
+def test_host_cannot_mark_themselves_or_twice_or_after_the_duel_is_decided():
+    tour = started()
+    assert_refused(tour, r1.player_left(tour, "p0", "p0", START + 20))
+    a, b = next(duel for duel in tour["duels"] if "p0" not in duel)
+    tour, _ = r1.player_left(tour, "p0", a, START + 20)
+    assert_refused(tour, r1.player_left(tour, "p0", a, START + 21))
+    assert_refused(tour, r1.player_left(tour, "p0", b, START + 21))     # already decided
+
+
+def test_the_opponent_of_a_player_who_left_can_still_finish_their_games():
+    tour = started()
+    a, b = next(duel for duel in tour["duels"] if "p0" not in duel)
+    tour, _ = r1.player_left(tour, "p0", a, START + 5)
+    assert r1.phase(tour, b, START + 6) == "playing"
+    tour = play_all(tour, b, [True] * 4)
+    assert r1.is_done(tour, b)
+
+
+def test_host_can_end_the_round_now():
+    tour = started()
+    a, b = tour["duels"][0]
+    tour = play_all(play_all(tour, a, [True] * 4), b, [False] * 4)
+    tour, _ = r1.end_round_now(tour, "p0", START + 30, random.Random(1))
+    assert all(r1.is_done(tour, pid) for pid in tour["round1"]["players"])
+    assert tour["status"] == "round1_results"            # nobody waits for any timer
+    assert len(tour["eliminated"]) == 4
+
+
+def test_only_the_host_can_end_the_round_and_not_during_the_intro():
+    tour = started()
+    assert_refused(tour, r1.end_round_now(tour, "p1", START + 30))
+    assert_refused(tour, r1.end_round_now(tour, "p0", T0 + 1))
+
+
+def test_ending_the_round_closes_open_tie_breakers_too():
+    tour = started()
+    a, b = tour["duels"][0]
+    tour = play_all(play_all(tour, a, [False] * 4), b, [False] * 4)
+    now = started_at(tour, b)
+    tour, _ = r1.answer_tiebreak(tour, a, "45", now + 1)
+    tour, _ = r1.end_round_now(tour, "p0", now + 2, random.Random(1))
+    assert tour["round1"]["results"][0]["winner"] == a
+
+
+# --- progress on the race track -----------------------------------------------------
+
+def test_progress_moves_with_games_and_time_but_never_reaches_the_next_game_early():
+    tour = started()
+    assert r1.progress(tour, "p0", START) == 0
+    assert r1.progress(tour, "p0", START + 30) == 0.5
+    assert r1.progress(tour, "p0", START + 59) == 0.95
+    tour = play_one(tour, "p0", right=False, think=10)
+    assert r1.progress(tour, "p0", started_at(tour, "p0")) == 1
+    tour = play_all(tour, "p0", [True] * 3)
+    assert r1.progress(tour, "p0", started_at(tour, "p0") + 100) == 4
