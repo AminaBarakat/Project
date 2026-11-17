@@ -297,7 +297,7 @@ def picture_button_style(key, svg, height=120, selected=False, bob=False):
     return f"""<style>
 @keyframes mm-bob {{ 0%,100% {{ transform: translateY(0) }} 50% {{ transform: translateY(-5px) }} }}
 {b} {{
-  background: url("data:image/svg+xml;base64,{data}") center 4px / auto {height - 30}px no-repeat transparent !important;
+  background: url("data:image/svg+xml;base64,{data}") center 4px / min(calc(100% - 6px), {height - 30}px) auto no-repeat transparent !important;
   border: none !important; border-radius: 14px !important; box-shadow: none !important;
   min-height: {height}px; padding-top: {height - 34}px !important; width: 100%;
   transition: transform .15s ease, filter .15s ease; {ring}{float_}
@@ -308,6 +308,12 @@ def picture_button_style(key, svg, height=120, selected=False, bob=False):
 }}
 {b}:active {{ transform: scale(0.96); }}
 {b} p {{ font-weight: 600; color: {SILVER} !important; }}
+@media (max-width: 640px) {{
+  {b} {{ min-height: {int(height * 0.8)}px; padding-top: {int(height * 0.8) - 24}px !important;
+        padding-left: 2px !important; padding-right: 2px !important;
+        background-size: min(calc(100% - 6px), {int(height * 0.8) - 30}px) auto !important; }}
+  {b} p {{ font-size: .7rem !important; line-height: 1.1; }}
+}}
 </style>"""
 
 
@@ -337,3 +343,13 @@ def countdown(uid, seconds, total, label=""):
 <div style="background:rgba(255,255,255,.12);border-radius:5px;margin-bottom:.8rem">
   <div class="mm-bar-{uid}"></div>
 </div>"""
+
+
+def phone_grid_style(key):
+    """Keep the columns inside the container with this key side by side on
+    narrow screens, instead of Streamlit's default of stacking them."""
+    k = css_key(key)
+    return f"""<style>
+.st-key-{k} [data-testid="stHorizontalBlock"] {{ flex-wrap: nowrap !important; gap: .4rem !important; }}
+.st-key-{k} [data-testid="stColumn"] {{ min-width: 0 !important; width: auto !important; flex: 1 1 0 !important; }}
+</style>"""
