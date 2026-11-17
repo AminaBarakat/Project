@@ -146,7 +146,7 @@ def start(tournament, by_id, rng=None, now=None):
     new = copy.deepcopy(tournament)
     new["duels"] = [[ids[i], ids[i + 1]] for i in range(0, len(ids), 2)]
     new["status"] = "round1"
-    new["round1"] = round1.new_round(new["duels"], time.time() if now is None else now)
+    new["round1"] = round1.new_round(new["duels"], time.time() if now is None else now, rng)
     return new, "The duels are set. Let the games begin!"
 
 
