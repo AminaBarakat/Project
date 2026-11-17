@@ -16,6 +16,10 @@ AVATARS = {
     "boy": ("Theo · classic", "assets/detective-boy.png"),
     "girl_violet": ("Ivy · violet", "assets/detective-girl-violet.png"),
     "boy_teal": ("Theo · teal", "assets/detective-boy-teal.png"),
+    "girl_emerald": ("Ivy · emerald", "assets/detective-girl-emerald.png"),
+    "girl_ruby": ("Ivy · ruby", "assets/detective-girl-ruby.png"),
+    "boy_royal": ("Theo · royal", "assets/detective-boy-royal.png"),
+    "boy_amber": ("Theo · amber", "assets/detective-boy-amber.png"),
 }
 
 # Characters that mean something in Markdown. Player names are typed by players,
@@ -114,12 +118,13 @@ def show_wordmark():
     )
 
 
-def avatar_picker(key):
-    """Clickable glass portrait cards, saved in this phone until the form is sent."""
+def avatar_picker(key, unavailable=()):
+    """Clickable glass portrait cards; occupied portraits are shown as unavailable."""
     choice_key = f"{key}_choice"
-    if choice_key not in st.session_state:
-        st.session_state[choice_key] = "girl"
-    st.markdown("<div class='mm-avatar-help'>Choose your detective — tap a whole portrait card.</div>", unsafe_allow_html=True)
+    unavailable = set(unavailable)
+    if choice_key not in st.session_state or st.session_state[choice_key] in unavailable:
+        st.session_state[choice_key] = next((option for option in AVATARS if option not in unavailable), "girl")
+    st.markdown("<div class='mm-avatar-help'>Choose your detective — each portrait can be claimed by one player only.</div>", unsafe_allow_html=True)
     options = list(AVATARS)
     for start in range(0, len(options), 2):
         columns = st.columns(2)
@@ -127,18 +132,19 @@ def avatar_picker(key):
             _, path = AVATARS[option]
             widget_key = f"{key}_{option}"
             selected = st.session_state[choice_key] == option
+            taken = option in unavailable
             selector = f".st-key-{widget_key} div.stButton > button"
             selected_style = "outline:3px solid #9be4ff !important; outline-offset:2px; box-shadow:0 0 24px rgba(155,228,255,.58) !important;" if selected else ""
             st.markdown(f"""<style>
             {selector} {{ background: linear-gradient(rgba(30,14,58,.12), rgba(30,14,58,.55)), url('{avatar_data_url(path)}') center / auto 158px no-repeat, rgba(255,255,255,.08) !important;
               border:1px solid rgba(226,183,255,.72) !important; border-radius:18px !important; min-height:190px; padding:158px .3rem .4rem !important;
-              transition:transform .15s ease, box-shadow .15s ease; {selected_style} }}
+              transition:transform .15s ease, box-shadow .15s ease; {selected_style} {'opacity:.28 !important; filter:grayscale(1);' if taken else ''} }}
             {selector}:hover {{ transform:translateY(-4px); box-shadow:0 0 22px rgba(203,151,255,.55) !important; }}
             {selector} p {{ color:transparent !important; font-size:0 !important; }}
             {selector}::after {{ content:'✓'; color:#fff; font-size:1.55rem; opacity:{'1' if selected else '0'}; position:absolute; right:.65rem; top:.4rem; text-shadow:0 0 8px #62d4ff; }}
             </style>""", unsafe_allow_html=True)
             with column:
-                if st.button(" ", key=widget_key, width="stretch"):
+                if st.button(" ", key=widget_key, width="stretch", disabled=taken):
                     st.session_state[choice_key] = option
                     st.rerun()
     return st.session_state[choice_key]
