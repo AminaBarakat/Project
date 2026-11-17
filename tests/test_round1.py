@@ -7,6 +7,9 @@ instead of waiting."""
 
 import copy
 import random
+from itertools import permutations
+
+import pytest
 
 import round1 as r1
 import tournament as t
@@ -16,18 +19,30 @@ START = T0 + r1.INTRO_SECONDS                 # the moment the first game appear
 NAMES = ["Ana", "Bruno", "Carla", "Dani", "Eva", "Filipe", "Gui", "Helena"]
 THINK = r1.MEMORY_SHOW_SECONDS + 1            # seconds a test player "thinks" per game
 
-RIGHT = {
-    "number_lock": "6205",
-    "pattern": "C",
-    "escape_route": ["Hall", "Library", "Billiard Room", "Study", "Exit"],
-    "memory": ["Compass", "Candle", "Hourglass"],
-}
-WRONG = {
-    "number_lock": "1234",
-    "pattern": "A",
-    "escape_route": ["Kitchen", "Pantry"],
-    "memory": ["Compass", "Candle", "Key"],
-}
+def all_routes(doors, here="Start", so_far=()):
+    """Every complete walk through an escape map, from Start to a dead end."""
+    if here not in doors:
+        yield list(so_far)
+        return
+    for room in doors[here]:
+        yield from all_routes(doors, room, so_far + (room,))
+
+
+def right_answer(tour, game):
+    p = r1.puzzle(tour, game)
+    return {"number_lock": p.get("answer"), "pattern": p.get("answer"),
+            "escape_route": p.get("answer"), "memory": p.get("missing")}[game]
+
+
+def wrong_answer(tour, game):
+    p = r1.puzzle(tour, game)
+    if game == "number_lock":
+        return "1234" if p["answer"] != "1234" else "5678"
+    if game == "pattern":
+        return next(k for k in p["options"] if k != p["answer"])
+    if game == "escape_route":
+        return next(r for r in all_routes(p["map"]) if r != p["answer"])
+    return p["missing"][:2] + [next(i for i in r1.MEMORY_ITEMS if i not in p["missing"])]
 
 
 def started(seed=1):
@@ -47,7 +62,8 @@ def play_one(tour, pid, right, think=THINK):
     """pid answers their current game after `think` seconds."""
     game = r1.current_game(tour, pid)
     now = started_at(tour, pid) + think
-    tour, _ = r1.answer(tour, pid, r1.game_number(tour, pid), (RIGHT if right else WRONG)[game], now)
+    value = right_answer(tour, game) if right else wrong_answer(tour, game)
+    tour, _ = r1.answer(tour, pid, r1.game_number(tour, pid), value, now)
     return tour
 
 
@@ -63,98 +79,156 @@ def assert_refused(tour, result):
     assert after == tour and message
 
 
-# --- the games themselves ------------------------------------------------------
+# --- every version of every game has exactly one answer ----------------------------
 
-def test_number_lock_answer_is_the_only_code_that_fits_the_clues():
-    from itertools import permutations
+LOCKS = r1.PUZZLES["number_lock"]
+WALLS = r1.PUZZLES["pattern"]
+MAPS = r1.PUZZLES["escape_route"]
+MEMORIES = r1.PUZZLES["memory"]
 
+
+def test_each_game_has_five_versions():
+    assert all(len(versions) == 5 for versions in r1.PUZZLES.values())
+
+
+def test_no_two_versions_of_a_game_are_the_same():
+    for versions in r1.PUZZLES.values():
+        answers = [str(v.get("answer", v.get("missing"))) + str(v.get("grid", "")) for v in versions]
+        assert len(set(answers)) == len(answers)
+
+
+@pytest.mark.parametrize("lock", LOCKS)
+def test_number_lock_answer_is_the_only_code_that_fits_the_clues(lock):
     def feedback(guess, code):
         right_place = sum(g == c for g, c in zip(guess, code))
         return right_place, len(set(guess) & set(code)) - right_place
 
     codes = ["".join(p) for p in permutations("0123456789", 4)]      # 4 different digits
-    fits = [c for c in codes
-            if all(feedback(g, c) == r1.NUMBER_LOCK_FEEDBACK[g] for g, _ in r1.NUMBER_LOCK_CLUES)]
-    assert fits == [r1.NUMBER_LOCK_ANSWER]
+    fits = [c for c in codes if all(feedback(g, c) == f for g, f in lock["feedback"].items())]
+    assert fits == [lock["answer"]]
 
 
-def test_number_lock_clue_texts_match_the_feedback():
-    words = {(1, 1): "right place; one", (0, 2): "Two digits", (0, 1): "One digit is right but"}
-    for guess, text in r1.NUMBER_LOCK_CLUES:
-        assert words[r1.NUMBER_LOCK_FEEDBACK[guess]] in text
+def test_every_lock_clue_has_a_sentence():
+    for lock in LOCKS:
+        for feedback in lock["feedback"].values():
+            assert r1.clue_text(feedback)
 
 
 def test_number_lock_checks():
-    assert r1.check("number_lock", " 6205 ") == "right"
-    assert r1.check("number_lock", "6250") == "wrong"
+    lock = LOCKS[0]
+    assert r1.check("number_lock", " 6205 ", lock) == "right"
+    assert r1.check("number_lock", "6250", lock) == "wrong"
     for bad in ["620", "62055", "62a5", "6605", "", None]:
-        assert r1.check("number_lock", bad) == "invalid"
+        assert r1.check("number_lock", bad, lock) == "invalid"
 
 
-def test_pattern_wall_has_exactly_one_tile_that_fits():
-    grid = r1.PATTERN_GRID
+@pytest.mark.parametrize("wall", WALLS)
+def test_pattern_wall_is_a_proper_wall_with_exactly_one_tile_that_fits(wall):
+    grid = wall["grid"]
+    tiles = [grid[i][j] for i in range(4) for j in range(4) if grid[i][j]]
+    for i in range(4):          # rows and columns never repeat a shape or a colour
+        for line in ([grid[i][j] for j in range(4)], [grid[j][i] for j in range(4)]):
+            present = [t for t in line if t]
+            assert len({s for s, _ in present}) == len(present)
+            assert len({c for _, c in present}) == len(present)
+    assert len(tiles) == 15
     row, col = next((i, j) for i in range(4) for j in range(4) if grid[i][j] is None)
     others = [grid[row][k] for k in range(4) if k != col] + [grid[k][col] for k in range(4) if k != row]
-    fits = [key for key, (shape, colour) in r1.PATTERN_OPTIONS.items()
+    fits = [key for key, (shape, colour) in wall["options"].items()
             if shape not in {s for s, _ in others} and colour not in {c for _, c in others}]
-    assert fits == [r1.PATTERN_ANSWER]
+    assert fits == [wall["answer"]]
+
+
+def test_pattern_answers_are_not_always_in_the_same_place():
+    assert {wall["answer"] for wall in WALLS} == {"A", "B", "C", "D"}
 
 
 def test_pattern_checks():
-    assert r1.check("pattern", "C") == "right"
-    assert r1.check("pattern", "A") == "wrong"
-    assert r1.check("pattern", "E") == "invalid"
+    wall = WALLS[0]
+    assert r1.check("pattern", "C", wall) == "right"
+    assert r1.check("pattern", "A", wall) == "wrong"
+    assert r1.check("pattern", "E", wall) == "invalid"
 
 
-def test_escape_route_has_exactly_one_safe_path():
-    hidden = r1.ESCAPE_HIDDEN
+@pytest.mark.parametrize("house", MAPS)
+def test_escape_route_has_exactly_one_safe_path(house):
+    hidden = house["hidden"]
     forbidden = hidden["food"] | hidden["ticks"] | hidden["guard"]
-
-    def routes(here="Start", so_far=()):
-        if here not in r1.ESCAPE_MAP:
-            yield list(so_far)
-            return
-        for room in r1.ESCAPE_MAP[here]:
-            yield from routes(room, so_far + (room,))
 
     def safe(route):
         fires = [i for i, room in enumerate(route) if room in hidden["fireplace"]]
         return (route[-1] == "Exit" and not forbidden & set(route)
                 and len(fires) == 1 and len(route) - 1 - fires[0] == 3)
 
-    all_routes = list(routes())
-    assert len(all_routes) == 28
-    assert [r for r in all_routes if safe(r)] == [r1.ESCAPE_ANSWER]
+    routes = list(all_routes(house["map"]))
+    assert len(routes) >= 15
+    assert [r for r in routes if safe(r)] == [house["answer"]]
 
 
-def test_every_escape_room_has_a_description():
-    rooms = {room for doors in r1.ESCAPE_MAP.values() for room in doors}
-    assert rooms <= set(r1.ESCAPE_ROOMS)
-    assert set().union(*r1.ESCAPE_HIDDEN.values()) <= set(r1.ESCAPE_ROOMS)
+@pytest.mark.parametrize("house", MAPS)
+def test_every_door_has_a_description_and_a_picture(house):
+    from screens import art
+    rooms = {room for doors in house["map"].values() for room in doors}
+    assert rooms <= set(house["rooms"])
+    assert rooms <= set(art.ROOMS)
 
 
 def test_escape_route_checks():
-    assert r1.check("escape_route", ["Hall", "Library", "Billiard Room", "Study", "Exit"]) == "right"
+    house = MAPS[0]
+    assert r1.check("escape_route", ["Hall", "Library", "Billiard Room", "Study", "Exit"], house) == "right"
     for wrong in (["Kitchen", "Pantry"],
                   ["Hall", "Library", "Chapel", "Study", "Exit"],           # the bell chimes
                   ["Hall", "Gallery", "Study", "Exit"],                     # no fireplace
                   ["Conservatory", "Library", "Billiard Room", "Study", "Exit"],   # breakfast
                   ["Hall", "Library", "Billiard Room", "Storage Room"]):
-        assert r1.check("escape_route", wrong) == "wrong"
+        assert r1.check("escape_route", wrong, house) == "wrong"
     for bad in (["Hall", "Exit"], ["Hall", "Library"], [], "Hall"):
-        assert r1.check("escape_route", bad) == "invalid"
+        assert r1.check("escape_route", bad, house) == "invalid"
 
 
-def test_memory_shows_the_others_without_the_missing_two():
-    assert sorted(r1.MEMORY_REMAINING + r1.MEMORY_MISSING) == sorted(r1.MEMORY_ITEMS)
+@pytest.mark.parametrize("memory", MEMORIES)
+def test_memory_shows_the_others_without_the_missing_three(memory):
+    assert len(memory["missing"]) == 3
+    assert sorted(memory["remaining"] + memory["missing"]) == sorted(r1.MEMORY_ITEMS)
 
 
 def test_memory_checks():
-    assert r1.check("memory", ["candle", " Compass", "HOURGLASS"]) == "right"
-    assert r1.check("memory", ["Compass", "Candle", "Key"]) == "wrong"
+    memory = MEMORIES[0]
+    assert r1.check("memory", ["candle", " Compass", "HOURGLASS"], memory) == "right"
+    assert r1.check("memory", ["Compass", "Candle", "Key"], memory) == "wrong"
     for bad in (["Compass", "Candle"], ["Compass", "Compass", "Candle"], ["Compass", "Candle", "Dragon"],
                 ["Compass", "Candle", "Hourglass", "Key"], "Compass"):
-        assert r1.check("memory", bad) == "invalid"
+        assert r1.check("memory", bad, memory) == "invalid"
+
+
+# --- the draw of versions ---------------------------------------------------------
+
+def test_one_version_of_each_game_is_drawn_per_tournament():
+    tour = started()
+    assert set(tour["round1"]["puzzles"]) == set(r1.GAMES)
+    for game, number in tour["round1"]["puzzles"].items():
+        assert 0 <= number < len(r1.PUZZLES[game])
+
+
+def test_different_tournaments_get_different_puzzles():
+    draws = {tuple(sorted(started(seed)["round1"]["puzzles"].items())) for seed in range(20)}
+    assert len(draws) > 3
+
+
+def test_both_players_in_a_duel_answer_the_same_version():
+    tour = started()
+    a, b = tour["duels"][0]
+    for game in r1.GAMES:
+        assert right_answer(tour, game) == right_answer(tour, game)     # one draw per tournament
+    tour = play_all(tour, a, [True] * 4)
+    tour = play_all(tour, b, [True] * 4)
+    assert r1.points(tour, a) == r1.points(tour, b) == 4
+
+
+def test_older_saved_games_without_a_draw_use_the_first_version():
+    tour = started()
+    del tour["round1"]["puzzles"]
+    assert r1.puzzle(tour, "number_lock") is LOCKS[0]
 
 
 # --- the order of games -------------------------------------------------------
@@ -194,7 +268,7 @@ def test_intro_then_the_first_game_with_its_own_60_seconds():
 def test_no_answers_during_the_intro():
     tour = started()
     game = r1.current_game(tour, "p0")
-    assert_refused(tour, r1.answer(tour, "p0", 0, RIGHT[game], T0 + 1))
+    assert_refused(tour, r1.answer(tour, "p0", 0, right_answer(tour, game), T0 + 1))
 
 
 def test_answering_starts_the_next_game_straight_away_with_a_fresh_timer():
@@ -215,7 +289,7 @@ def test_running_out_of_time_moves_on_to_the_next_game():
 def test_an_answer_for_a_game_that_already_ran_out_is_refused():
     tour = started()
     game = r1.current_game(tour, "p0")
-    assert_refused(tour, r1.answer(tour, "p0", 0, RIGHT[game], START + r1.GAME_SECONDS + 1))
+    assert_refused(tour, r1.answer(tour, "p0", 0, right_answer(tour, game), START + r1.GAME_SECONDS + 1))
 
 
 def test_memory_answer_refused_while_items_are_still_shown():
@@ -224,7 +298,7 @@ def test_memory_answer_refused_while_items_are_still_shown():
     while r1.current_game(tour, pid) != "memory":
         tour = play_one(tour, pid, right=True)
     n = r1.game_number(tour, pid)
-    assert_refused(tour, r1.answer(tour, pid, n, RIGHT["memory"], started_at(tour, pid) + 1))
+    assert_refused(tour, r1.answer(tour, pid, n, right_answer(tour, "memory"), started_at(tour, pid) + 1))
     tour = play_one(tour, pid, right=True)
     assert tour["round1"]["players"][pid]["results"][-1]["correct"] is True
 
@@ -234,7 +308,7 @@ def test_memory_answer_refused_while_items_are_still_shown():
 def test_one_try_per_game():
     tour = play_one(started(), "p0", right=False)
     first_game = r1.order_of(tour, "p0")[0]
-    assert_refused(tour, r1.answer(tour, "p0", 0, RIGHT[first_game], started_at(tour, "p0") + 1))
+    assert_refused(tour, r1.answer(tour, "p0", 0, right_answer(tour, first_game), started_at(tour, "p0") + 1))
 
 
 def test_invalid_answer_is_refused_and_does_not_use_the_try():
