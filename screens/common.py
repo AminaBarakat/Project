@@ -41,17 +41,18 @@ def apply_theme():
       letter-spacing: .035em; text-shadow: 0 1px 0 #ffffff66, 0 0 18px rgba(193, 116, 255, .44); }
     h2, h3 { color: #dbbaff !important; }
     [data-testid="stCaptionContainer"], small { color: #d0bedf !important; }
-    /* Forms stay pale so typed answers and names are always easy to read. */
-    [data-baseweb="input"] > div, [data-baseweb="select"] > div, [data-baseweb="base-input"] {
-      background: #f8f4fc !important; border-color: #d6b7eb !important; color: #1d102a !important;
+    /* Dark glass fields keep every typed answer bright and readable. */
+    [data-baseweb="input"] > div, [data-baseweb="select"] > div, [data-baseweb="base-input"], [data-baseweb="textarea"] {
+      background: rgba(40, 17, 79, .92) !important; border-color: #b982e4 !important; color: #f8f2ff !important;
     }
-    input, textarea, [data-baseweb="input"] input, [data-baseweb="textarea"] textarea {
-      color: #1d102a !important; -webkit-text-fill-color: #1d102a !important; caret-color: #551f78 !important;
+    input, textarea, [data-baseweb="input"] input, [data-baseweb="textarea"] textarea,
+    [data-baseweb="select"] input, [data-baseweb="select"] div, [data-baseweb="select"] span {
+      color: #f8f2ff !important; -webkit-text-fill-color: #f8f2ff !important; caret-color: #ffffff !important;
     }
-    input::placeholder, textarea::placeholder { color: #786881 !important; opacity: 1 !important; }
+    input::placeholder, textarea::placeholder { color: #d8c6e8 !important; opacity: 1 !important; }
     input:-webkit-autofill, textarea:-webkit-autofill {
-      -webkit-text-fill-color: #1d102a !important;
-      -webkit-box-shadow: 0 0 0 1000px #f8f4fc inset !important;
+      -webkit-text-fill-color: #f8f2ff !important;
+      -webkit-box-shadow: 0 0 0 1000px #28114f inset !important;
       transition: background-color 9999s ease-in-out 0s;
     }
     div.stButton > button, div.stFormSubmitButton > button {
@@ -96,6 +97,10 @@ def apply_theme():
     .mm-lobby-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1rem; align-items:stretch; margin:1rem 0; }
     .mm-lobby-card { background:rgba(38,16,68,.44); border:1px solid rgba(194,199,212,.24); border-radius:16px; min-height:180px; padding:.85rem .45rem .6rem; }
     .mm-lobby-badges { color:#d6b7eb; font-size:.78rem; margin-top:.35rem; text-align:center; }
+    .mm-remove-button button { background:rgba(116, 19, 42, .72) !important; border:1px solid #ff8592 !important; border-radius:9px !important;
+      box-shadow:none !important; color:#ffd8dd !important; font-family:Cinzel, Georgia, serif !important; font-size:1.1rem !important;
+      line-height:1 !important; min-height:30px !important; padding:.12rem .52rem !important; }
+    .mm-remove-button button:hover { background:#b42f4a !important; color:#fff !important; }
     @media (max-width: 560px) { .mm-duel { gap:.45rem; padding:.7rem .35rem; } .mm-profile-photo { width:94px; height:94px; } .mm-results-grid { grid-template-columns:1fr 1fr; gap:.65rem; } }
     </style>
     """, unsafe_allow_html=True)
@@ -119,20 +124,21 @@ def avatar_picker(key):
     for start in range(0, len(options), 2):
         columns = st.columns(2)
         for column, option in zip(columns, options[start:start + 2]):
-            label, path = AVATARS[option]
+            _, path = AVATARS[option]
             widget_key = f"{key}_{option}"
             selected = st.session_state[choice_key] == option
             selector = f".st-key-{widget_key} div.stButton > button"
             selected_style = "outline:3px solid #9be4ff !important; outline-offset:2px; box-shadow:0 0 24px rgba(155,228,255,.58) !important;" if selected else ""
             st.markdown(f"""<style>
-            {selector} {{ background: linear-gradient(rgba(30,14,58,.12), rgba(30,14,58,.55)), url('{avatar_data_url(path)}') center 12px / auto 142px no-repeat, rgba(255,255,255,.08) !important;
+            {selector} {{ background: linear-gradient(rgba(30,14,58,.12), rgba(30,14,58,.55)), url('{avatar_data_url(path)}') center / auto 158px no-repeat, rgba(255,255,255,.08) !important;
               border:1px solid rgba(226,183,255,.72) !important; border-radius:18px !important; min-height:190px; padding:158px .3rem .4rem !important;
               transition:transform .15s ease, box-shadow .15s ease; {selected_style} }}
             {selector}:hover {{ transform:translateY(-4px); box-shadow:0 0 22px rgba(203,151,255,.55) !important; }}
-            {selector} p {{ color:#f8f2ff !important; font-weight:800; font-size:.78rem; }}
+            {selector} p {{ color:transparent !important; font-size:0 !important; }}
+            {selector}::after {{ content:'✓'; color:#fff; font-size:1.55rem; opacity:{'1' if selected else '0'}; position:absolute; right:.65rem; top:.4rem; text-shadow:0 0 8px #62d4ff; }}
             </style>""", unsafe_allow_html=True)
             with column:
-                if st.button(("✓ " if selected else "") + label, key=widget_key, width="stretch"):
+                if st.button(" ", key=widget_key, width="stretch"):
                     st.session_state[choice_key] = option
                     st.rerun()
     return st.session_state[choice_key]

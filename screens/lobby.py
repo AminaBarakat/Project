@@ -39,26 +39,32 @@ def live_players(code, me):
     count = len(tour["players"])
     st.subheader(f"Players ({count}/{rules.MAX_PLAYERS})")
 
-    cards = []
-    for player in tour["players"]:
+    # Each player owns one small glass card.  The host's remove control lives in
+    # that card so it is obvious who will be removed, instead of in a detached row.
+    columns = st.columns(4)
+    for number, player in enumerate(tour["players"]):
         badges = []
         if player["id"] == tour["host_id"]:
             badges.append("host")
         if player["id"] == me:
             badges.append("you")
         badge_text = " · ".join(badges)
-        cards.append(f"<div class='mm-lobby-card'>{common.profile_card(player)}"
-                     f"<div class='mm-lobby-badges'>{badge_text}</div></div>")
-    st.markdown("<div class='mm-lobby-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
-
-    if host:
-        removable = [player for player in tour["players"] if player["id"] != me]
-        if removable:
-            st.caption("Host controls")
-            controls = st.columns(len(removable))
-            for column, player in zip(controls, removable):
-                with column:
-                    if st.button(f"Remove {player['name']}", key=f"remove_{player['id']}"):
+        with columns[number % 4]:
+            with st.container(border=True):
+                st.markdown(
+                    common.profile_card(player) + f"<div class='mm-lobby-badges'>{badge_text}</div>",
+                    unsafe_allow_html=True,
+                )
+                if host and player["id"] != me:
+                    key = f"remove_{player['id']}"
+                    st.markdown(f"""<style>
+                    .st-key-{key} div.stButton > button {{ background:rgba(116,19,42,.72) !important; border:1px solid #ff8592 !important;
+                      border-radius:9px !important; box-shadow:none !important; color:#ffd8dd !important; font-family:Cinzel, Georgia, serif !important;
+                      font-size:1.1rem !important; line-height:1 !important; min-height:30px !important; padding:.12rem .52rem !important; }}
+                    .st-key-{key} div.stButton > button:hover {{ background:#b42f4a !important; color:#fff !important; }}
+                    </style>""", unsafe_allow_html=True)
+                    remove = st.button("×", key=key, help=f"Remove {player['name']}")
+                    if remove:
                         _, message = storage.update(code, rules.remove_player, me, player["id"])
                         common.flash("info", message)
                         st.rerun(scope="fragment")
