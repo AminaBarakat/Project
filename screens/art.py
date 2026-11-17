@@ -516,3 +516,44 @@ def race_track(runners, uid, games=4):
 ICONS["finish"] = f'''<path d="M26 90 V14" stroke="{SILVER}" stroke-width="5" stroke-linecap="round"/>
     <path d="M28 16 H80 L70 32 L80 48 H28 Z" fill="{SILVER}"/>
     <path d="M28 16 H41 V32 H28 Z M54 16 H67 V32 H54 Z M41 32 H54 V48 H41 Z M67 32 H76 L80 48 H67 Z" fill="{BG}"/>'''
+
+
+# --- The scoreboard after Round 1 ----------------------------------------------------
+
+ICONS["mark_right"] = f'''<circle cx="50" cy="50" r="38" fill="{TILE_COLOURS['ice']}"/>
+    <path d="M32 52 L45 65 L70 38" fill="none" stroke="{BG}" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>'''
+ICONS["mark_wrong"] = f'''<circle cx="50" cy="50" r="36" fill="none" stroke="{PURPLE}" stroke-width="7"/>
+    <path d="M36 36 L64 64 M64 36 L36 64" stroke="{PURPLE}" stroke-width="9" stroke-linecap="round"/>'''
+ICONS["mark_time"] = f'''<circle cx="50" cy="50" r="36" fill="none" stroke="{SILVER}" stroke-width="7" opacity=".7"/>
+    <path d="M50 50 V30 M50 50 L64 58" stroke="{SILVER}" stroke-width="8" stroke-linecap="round" opacity=".7"/>'''
+
+
+def scoreboard(rows, game_ids):
+    """How everyone did in Round 1: a mark per game, the score and the total time.
+    It never shows the answers themselves.
+
+    rows: list of dicts {"name", "marks": {game_id: "right"/"wrong"/"time"},
+          "points", "seconds", "me", "out"}. Names are escaped here."""
+    import html as _html
+    head = "".join(f'<th style="padding:.3rem .1rem">{icon(g, 22)}</th>' for g in game_ids)
+    body = []
+    for r in rows:
+        name = _html.escape(r["name"])
+        marks = "".join(f'<td style="text-align:center;padding:.3rem .1rem">{icon("mark_" + r["marks"][g], 20)}</td>'
+                        for g in game_ids)
+        style = (f"background:rgba(155,228,255,.10);outline:2px solid {TILE_COLOURS['ice']};" if r["me"] else "")
+        style += "opacity:.55;" if r["out"] else ""
+        tag = (f' <span style="font-size:.7rem;color:#e0449b;font-weight:700">OUT</span>' if r["out"] else "")
+        you = ' <span style="font-size:.7rem;color:#9be4ff;font-weight:700">YOU</span>' if r["me"] else ""
+        body.append(
+            f'<tr style="{style}">'
+            f'<td style="padding:.3rem .4rem;white-space:nowrap;max-width:7.5rem;overflow:hidden;text-overflow:ellipsis">{name}{you}{tag}</td>'
+            f'{marks}'
+            f'<td style="text-align:center;font-weight:800;padding:.3rem .2rem">{r["points"]}/4</td>'
+            f'<td style="text-align:right;padding:.3rem .4rem;color:{SILVER};white-space:nowrap">{r["seconds"]}s</td></tr>')
+    return (f'<div style="overflow-x:auto;border:1.5px solid {SILVER}88;border-radius:14px;'
+            f'background:rgba(29,20,56,.85);margin:.4rem 0 1rem">'
+            f'<table style="width:100%;border-collapse:collapse;color:{IVORY};font-size:.85rem">'
+            f'<thead><tr style="border-bottom:1px solid {SILVER}55"><th style="text-align:left;padding:.4rem .5rem">Detective</th>'
+            f'{head}<th>Score</th><th style="text-align:right;padding:.4rem .5rem">Time</th></tr></thead>'
+            f'<tbody>{"".join(body)}</tbody></table></div>')
