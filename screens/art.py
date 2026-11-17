@@ -220,8 +220,23 @@ def room(name):
 
 # --- Pattern Wall tiles ----------------------------------------------------------
 
-def _shape(shape, colour, cx, cy, r):
-    fill = TILE_COLOURS[colour]
+# Each colour also has its own texture, so the tiles can be told apart without
+# relying on colour alone (colour-blind players): dots on purple, stripes on royal
+# blue, fine lines on ice blue; silver stays plain.
+TEXTURES = (
+    '<defs>'
+    '<pattern id="tx-purple" width="9" height="9" patternUnits="userSpaceOnUse">'
+    '<circle cx="4.5" cy="4.5" r="1.9" fill="#1d1438" opacity=".55"/></pattern>'
+    '<pattern id="tx-royal" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">'
+    '<rect width="3.2" height="9" fill="#ffffff" opacity=".38"/></pattern>'
+    '<pattern id="tx-ice" width="9" height="6" patternUnits="userSpaceOnUse">'
+    '<rect width="9" height="1.8" fill="#1d1438" opacity=".5"/></pattern>'
+    '</defs>'
+)
+_TEXTURED = {"purple", "royal", "ice"}
+
+
+def _shape_outline(shape, cx, cy, r, fill):
     if shape == "circle":
         return f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="{fill}"/>'
     if shape == "square":
@@ -233,8 +248,17 @@ def _shape(shape, colour, cx, cy, r):
     raise ValueError(shape)
 
 
+def _shape(shape, colour, cx, cy, r):
+    """A coloured shape, with its colour's texture on top. The SVG it goes into
+    must include TEXTURES."""
+    drawn = _shape_outline(shape, cx, cy, r, TILE_COLOURS[colour])
+    if colour in _TEXTURED:
+        drawn += _shape_outline(shape, cx, cy, r, f"url(#tx-{colour})")
+    return drawn
+
+
 def tile(shape, colour):
-    return _svg(_shape(shape, colour, 50, 50, 28))
+    return _svg(TEXTURES + _shape(shape, colour, 50, 50, 28))
 
 
 def wall(grid):
@@ -253,7 +277,7 @@ def wall(grid):
                              f'repeatCount="indefinite"/></text>')
             else:
                 parts.append(_shape(value[0], value[1], x + 50, y + 50, 26))
-    return _svg("".join(parts), size=size)
+    return _svg(TEXTURES + "".join(parts), size=size)
 
 
 # --- Number Lock padlock ---------------------------------------------------------
@@ -338,7 +362,7 @@ def countdown(uid, seconds, total, label=""):
 </style>
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
   <span style="color:{SILVER};font-size:.9rem">{label}</span>
-  <span style="font-size:1.7rem;font-weight:700;color:{IVORY}">⏱️ <span class="mm-n-{uid}"></span></span>
+  <span style="font-size:1.7rem;font-weight:700;color:{IVORY};display:flex;align-items:center">{icon("timer", 30)}<span class="mm-n-{uid}"></span></span>
 </div>
 <div style="background:rgba(255,255,255,.12);border-radius:5px;margin-bottom:.8rem">
   <div class="mm-bar-{uid}"></div>
@@ -353,3 +377,142 @@ def phone_grid_style(key):
 .st-key-{k} [data-testid="stHorizontalBlock"] {{ flex-wrap: nowrap !important; gap: .4rem !important; }}
 .st-key-{k} [data-testid="stColumn"] {{ min-width: 0 !important; width: auto !important; flex: 1 1 0 !important; }}
 </style>"""
+
+
+# --- Icons (instead of emojis) ---------------------------------------------------------
+# Small silver line drawings with a purple accent, in the same style as the cards.
+
+_ICON = f'fill="none" stroke="{SILVER}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"'
+
+ICONS = {
+    "number_lock": f'''<path d="M32 44 V32 C 32 18, 68 18, 68 32 V44" {_ICON}/>
+        <rect x="22" y="44" width="56" height="42" rx="8" fill="{PURPLE}" stroke="{SILVER}" stroke-width="4"/>
+        <circle cx="50" cy="61" r="6" fill="{BG}"/><path d="M50 65 V75" stroke="{BG}" stroke-width="5" stroke-linecap="round"/>''',
+    "pattern": f'''<rect x="16" y="16" width="30" height="30" rx="5" fill="{TILE_COLOURS['purple']}"/>
+        <rect x="54" y="16" width="30" height="30" rx="5" {_ICON}/>
+        <rect x="16" y="54" width="30" height="30" rx="5" {_ICON}/>
+        <rect x="54" y="54" width="30" height="30" rx="5" fill="{TILE_COLOURS['ice']}"/>
+        <text x="69" y="40" font-size="22" text-anchor="middle" fill="{SILVER}" font-family="Georgia,serif">?</text>''',
+    "escape_route": f'''<path d="M18 24 L38 16 L62 24 L82 16 V76 L62 84 L38 76 L18 84 Z" fill="{BG}" stroke="{SILVER}" stroke-width="4" stroke-linejoin="round"/>
+        <path d="M38 16 V76 M62 24 V84" stroke="{SILVER}" stroke-width="2" opacity=".6"/>
+        <path d="M26 66 C 36 56, 44 64, 52 50 S 66 38, 74 32" fill="none" stroke="{PURPLE}" stroke-width="4" stroke-dasharray="6 5" stroke-linecap="round"/>
+        <path d="M70 26 L78 34 M78 26 L70 34" stroke="{TILE_COLOURS['ice']}" stroke-width="4" stroke-linecap="round"/>''',
+    "memory": f'''<rect x="22" y="22" width="40" height="56" rx="6" fill="{BG}" stroke="{SILVER}" stroke-width="4" transform="rotate(-12 42 50)"/>
+        <rect x="40" y="20" width="40" height="56" rx="6" fill="{PURPLE}" stroke="{SILVER}" stroke-width="4" transform="rotate(10 60 48)"/>
+        <circle cx="60" cy="48" r="8" fill="none" stroke="{SILVER}" stroke-width="3"/>''',
+    "rules": f'''<path d="M26 18 H70 C 76 18, 80 22, 80 28 V78 C 80 84, 76 86, 72 86 H30" {_ICON}/>
+        <path d="M30 86 C 22 86, 20 80, 20 76 H62 C 62 80, 64 86, 72 86" {_ICON}/>
+        <path d="M26 18 C 20 18, 18 24, 20 28 H32" {_ICON}/>
+        <path d="M38 36 H70 M38 48 H70 M38 60 H60" stroke="{PURPLE}" stroke-width="4" stroke-linecap="round"/>''',
+    "timer": f'''<circle cx="50" cy="56" r="30" {_ICON}/>
+        <path d="M42 16 H58 M50 16 V26 M74 30 L80 24" {_ICON}/>
+        <path d="M50 56 V38 M50 56 L62 64" stroke="{PURPLE}" stroke-width="5" stroke-linecap="round"/>''',
+    "through": f'''<path d="M30 20 H70 V40 C 70 54, 60 62, 50 62 C 40 62, 30 54, 30 40 Z" fill="{PURPLE}" stroke="{SILVER}" stroke-width="4"/>
+        <path d="M30 26 H18 C 18 40, 24 46, 32 46 M70 26 H82 C 82 40, 76 46, 68 46" {_ICON}/>
+        <path d="M50 62 V74 M36 84 H64 M40 74 H60" {_ICON}/>''',
+    "eliminated": f'''<rect x="28" y="16" width="44" height="70" rx="3" {_ICON}/>
+        <path d="M28 16 L54 24 V92 L28 86 Z" fill="{BG}" stroke="{SILVER}" stroke-width="4" stroke-linejoin="round"/>
+        <path d="M62 44 L78 60 M78 44 L62 60" stroke="{PURPLE}" stroke-width="5" stroke-linecap="round"/>''',
+    "solutions": f'''<circle cx="42" cy="42" r="22" {_ICON}/>
+        <path d="M58 58 L82 82" stroke="{SILVER}" stroke-width="8" stroke-linecap="round"/>
+        <path d="M32 42 L40 50 L54 34" stroke="{PURPLE}" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>''',
+    "tiebreak": f'''<path d="M50 16 V82 M30 84 H70 M18 30 H82" {_ICON}/>
+        <path d="M18 30 L8 56 H28 Z M82 30 L72 56 H92 Z" fill="{PURPLE}" stroke="{SILVER}" stroke-width="3" stroke-linejoin="round"/>''',
+    "duel": f'''<path d="M20 80 L66 24 M66 24 L76 18 L72 30 Z M28 62 L38 72" {_ICON}/>
+        <path d="M80 80 L34 24 M34 24 L24 18 L28 30 Z M72 62 L62 72" stroke="{PURPLE}" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>''',
+}
+
+
+def icon_svg(name):
+    return _svg(ICONS[name], background=False)
+
+
+def icon(name, size=28):
+    """An inline icon, sitting on the text line like an emoji would."""
+    data = base64.b64encode(icon_svg(name).encode()).decode()
+    return (f'<img src="data:image/svg+xml;base64,{data}" '
+            f'style="width:{size}px;height:{size}px;vertical-align:middle;margin-right:.35rem"/>')
+
+
+def heading(name, text, size=34, level=3):
+    """A heading with an icon in front, in the theme's heading colour.
+    `text` must be our own text, never something a player typed."""
+    return (f'<h{level} style="display:flex;align-items:center;gap:.2rem;margin:.2rem 0 .6rem">'
+            f'{icon(name, size)}<span>{text}</span></h{level}>')
+
+
+def panel(icon_name, title, lines):
+    """A themed box (dark purple, silver edge) with an icon and a list of lines.
+    Replaces Streamlit's expander, which turns white on phones in light mode."""
+    items = "".join(f"<li>{line}</li>" for line in lines)
+    return (f'<div style="background:rgba(29,20,56,.85);border:1.5px solid {SILVER};border-radius:14px;'
+            f'padding:.8rem 1rem .4rem;margin-bottom:.8rem;color:{IVORY}">'
+            f'<div style="display:flex;align-items:center;font-weight:700;margin-bottom:.3rem">'
+            f'{icon(icon_name, 26)}{title}</div><ul style="margin:0 0 .4rem 1.1rem;padding:0">{items}</ul></div>')
+
+
+def banner(icon_name, text, good=True):
+    """A big themed message (e.g. 'You're through to Round 2!').
+    `text` must be our own text, never something a player typed."""
+    edge = TILE_COLOURS["ice"] if good else "#e0449b"
+    return (f'<div style="display:flex;align-items:center;gap:.6rem;background:rgba(29,20,56,.85);'
+            f'border:2px solid {edge};border-radius:14px;padding:.7rem 1rem;margin:.4rem 0 1rem;'
+            f'color:{IVORY};font-size:1.15rem;font-weight:700;box-shadow:0 0 18px {edge}55">'
+            f'{icon(icon_name, 40)}<span>{text}</span></div>')
+
+
+# --- The race track in the waiting room ------------------------------------------------
+
+def race_track(runners, uid, games=4):
+    """One animated track with every player as a token.
+
+    runners: list of dicts {"name", "from", "to", "me", "done"}, where "from"/"to"
+    are positions between 0 and `games` (the token slides from one to the other).
+    Names are player input, so they are HTML-escaped here."""
+    import html as _html
+
+    def x(pos):                       # 0 … games  →  5% … 88% across the track
+        return round(5 + 83 * max(0.0, min(games, pos)) / games, 2)
+
+    styles, tokens = [], []
+    for k, r in enumerate(runners):
+        name = _html.escape(r["name"][:12])
+        initial = _html.escape(r["name"][:1].upper() or "?")
+        above = k % 2 == 0
+        anim = f"mm-run-{uid}-{k}"
+        styles.append(f"@keyframes {anim} {{ from {{ left: {x(r['from'])}%; }} to {{ left: {x(r['to'])}%; }} }}")
+        ring = TILE_COLOURS["ice"] if r["me"] else SILVER
+        fill = TILE_COLOURS["silver"] if r["done"] else PURPLE
+        label = "You" if r["me"] else name
+        glow = f"box-shadow:0 0 12px {TILE_COLOURS['ice']};" if r["me"] else ""
+        tokens.append(
+            f'<div style="position:absolute;top:{14 if above else 52}px;left:{x(r["to"])}%;'
+            f'transform:translateX(-50%);animation:{anim} .9s ease-out;text-align:center;z-index:{20 if r["me"] else 10}">'
+            + (f'<div style="font-size:.7rem;color:{IVORY};white-space:nowrap;margin-bottom:2px;font-weight:{700 if r["me"] else 400}">{label}</div>' if above else "")
+            + f'<div style="width:26px;height:26px;border-radius:50%;background:{fill};border:2.5px solid {ring};{glow}'
+              f'display:flex;align-items:center;justify-content:center;color:{BG};font-weight:800;font-size:.8rem;margin:auto">{initial}</div>'
+            + (f'<div style="font-size:.7rem;color:{IVORY};white-space:nowrap;margin-top:2px;font-weight:{700 if r["me"] else 400}">{label}</div>' if not above else "")
+            + "</div>")
+
+    # small dividers between the games, a START label and the finish flag past the end
+    checkpoints = "".join(
+        f'<div style="position:absolute;top:43px;left:{x(g)}%;width:2px;height:18px;'
+        f'background:{SILVER};opacity:.55"></div>' for g in range(1, games))
+    checkpoints += (f'<div style="position:absolute;top:40px;left:0;font-size:.6rem;letter-spacing:.08em;'
+                    f'color:{SILVER};opacity:.8">START</div>')
+    flag = f'<div style="position:absolute;top:26px;left:92%">{icon("finish", 34)}</div>'
+    return f"""<style>
+{chr(10).join(styles)}
+@keyframes mm-shimmer-{uid} {{ from {{ background-position: 0 0; }} to {{ background-position: 200px 0; }} }}
+</style>
+<div style="position:relative;height:110px;margin:1rem 0 .4rem">
+  <div style="position:absolute;top:47px;left:5%;right:10%;height:10px;border-radius:5px;
+       background:repeating-linear-gradient(90deg,{TILE_COLOURS['purple']}55 0 20px,{TILE_COLOURS['ice']}55 20px 40px);
+       animation:mm-shimmer-{uid} 3s linear infinite;border:1px solid {SILVER}66"></div>
+  {checkpoints}{flag}{"".join(tokens)}
+</div>"""
+
+
+ICONS["finish"] = f'''<path d="M26 90 V14" stroke="{SILVER}" stroke-width="5" stroke-linecap="round"/>
+    <path d="M28 16 H80 L70 32 L80 48 H28 Z" fill="{SILVER}"/>
+    <path d="M28 16 H41 V32 H28 Z M54 16 H67 V32 H54 Z M41 32 H54 V48 H41 Z M67 32 H76 L80 48 H67 Z" fill="{BG}"/>'''

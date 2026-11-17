@@ -12,7 +12,6 @@ from screens import common
 
 REFRESH = "2s"
 
-
 def show(code, me):
     _live_round(code, me)
 

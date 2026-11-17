@@ -39,19 +39,29 @@ def live_players(code, me):
     count = len(tour["players"])
     st.subheader(f"Players ({count}/{rules.MAX_PLAYERS})")
 
+    cards = []
     for player in tour["players"]:
-        left, right = st.columns([4, 1], vertical_alignment="center")
-        label = common.profile_card(player)
+        badges = []
         if player["id"] == tour["host_id"]:
-            label += "<div style='text-align:center; color:#d6b7eb'>host</div>"
+            badges.append("host")
         if player["id"] == me:
-            label += "<div style='text-align:center; color:#d6b7eb'>you</div>"
-        left.markdown(label, unsafe_allow_html=True)
-        if host and player["id"] != me:
-            if right.button("Remove", key=f"remove_{player['id']}"):
-                _, message = storage.update(code, rules.remove_player, me, player["id"])
-                common.flash("info", message)
-                st.rerun(scope="fragment")
+            badges.append("you")
+        badge_text = " · ".join(badges)
+        cards.append(f"<div class='mm-lobby-card'>{common.profile_card(player)}"
+                     f"<div class='mm-lobby-badges'>{badge_text}</div></div>")
+    st.markdown("<div class='mm-lobby-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
+
+    if host:
+        removable = [player for player in tour["players"] if player["id"] != me]
+        if removable:
+            st.caption("Host controls")
+            controls = st.columns(len(removable))
+            for column, player in zip(controls, removable):
+                with column:
+                    if st.button(f"Remove {player['name']}", key=f"remove_{player['id']}"):
+                        _, message = storage.update(code, rules.remove_player, me, player["id"])
+                        common.flash("info", message)
+                        st.rerun(scope="fragment")
 
     for _ in range(rules.MAX_PLAYERS - count):
         st.markdown("<span style='opacity:0.4'>… waiting for a player</span>", unsafe_allow_html=True)

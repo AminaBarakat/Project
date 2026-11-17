@@ -6,7 +6,7 @@ The game is drawn once and only redrawn when YOU tap something. The countdown
 number and bar are animated by the browser itself (CSS), and a tiny invisible
 check redraws the page once when your time runs out or the memory objects must
 hide. Screens that wait for other players (waiting
-room, tie-breaker) check the database every 2 seconds, and only write to it when
+room, tie-breaker) check the database every second, and only write to it when
 something is actually due, like a timer that has run out.
 
 Things only this phone needs (the dials of the lock, the route clicked so far,
@@ -52,6 +52,8 @@ def show(code, me):
         _redraw_at(tour["round1"]["results_at"] + r1.RESULTS_SECONDS, "Round 2 begins in {}…")
     else:
         _waiting_or_tiebreak(code, me)
+        if rules.is_host(tour, me) and phase == "waiting":
+            _host_controls(code, me)
 
 
 def _load_settled(code, now):
@@ -98,7 +100,7 @@ def _game_header(tour, me, now):
                         f"Game {number + 1} of {len(r1.GAMES)} &nbsp; {dots}"))
 
 
-@st.fragment(run_every="2s")
+@st.fragment(run_every="1s")
 def _waiting_or_tiebreak(code, me):
     now = time.time()
     tour = _load_settled(code, now)
@@ -107,7 +109,7 @@ def _waiting_or_tiebreak(code, me):
     if r1.phase(tour, me, now) == "tiebreak":
         _tiebreak(tour, code, me, now)
     else:
-        _waiting(tour, me, now)
+        _waiting(tour, code, me, now)
 
 
 def _html(markup):
@@ -142,13 +144,14 @@ def _picture_button(key, svg, label, height=120, selected=False, bob=False):
 # --- intro ------------------------------------------------------------------------
 
 def _intro(tour, me):
-    st.title("Round 1: the duels")
+    _html(art.heading("duel", "Round 1: the duels", size=44, level=1))
     opponent = rules.opponent_of(tour, me)
     you = rules.find_player(tour, me)
     st.markdown("### Your first suspect is… your opponent.")
     st.markdown(common.duel_card(you, opponent), unsafe_allow_html=True)
     order = r1.order_of(tour, me)
-    st.markdown("**Your four games:** " + "  →  ".join(r1.GAMES[g] for g in order))
+    _html("<p><b>Your four games:</b> " + " &nbsp;→&nbsp; ".join(
+        f"{art.icon(g, 22)}{r1.GAMES[g]}" for g in order) + "</p>")
     st.caption(f"{r1.GAME_SECONDS} seconds and one try per game. Most right answers wins; "
                "on a draw, the faster one wins.")
     st.divider()
@@ -169,65 +172,50 @@ def _game(code, me):
     # The team theme paints every button purple; make switched-off ones look switched off.
     _html("<style>div.stButton > button:disabled { opacity: .35 !important; filter: grayscale(.6) "
           "!important; cursor: not-allowed !important; box-shadow: none !important; }</style>")
-    st.subheader(r1.GAMES[game])
+    _html(art.heading(game, r1.GAMES[game]))
 
+    puzzle = r1.puzzle(tour, game)          # the version this tournament drew
     if game == "number_lock":
-        _number_lock(code, me, number)
+        _number_lock(code, me, number, puzzle)
     elif game == "pattern":
-        _pattern(code, me, number)
+        _pattern(code, me, number, puzzle)
     elif game == "escape_route":
-        _escape_route(code, me, number)
+        _escape_route(code, me, number, puzzle)
     elif game == "memory":
-        _memory(tour, code, me, number, now)
+        _memory(tour, code, me, number, now, puzzle)
 
 
 def _submit(code, me, number, value):
     tour, message = storage.update(code, r1.answer, me, number, value, time.time())
     answered = tour is not None and r1.game_number(tour, me) > number
     if answered:
-        st.toast(message)
-        st.rerun()                            # the next game, with a fresh timer
+        st.rerun()                            # straight on, without saying right or wrong                            # the next game, with a fresh timer
     else:
         st.error(message)
 
 
-def _number_lock(code, me, number):
+def _number_lock(code, me, number, puzzle):
     st.caption(r1.NUMBER_LOCK_RULE)
-    for guess, clue in r1.NUMBER_LOCK_CLUES:
-        st.markdown(f"`{guess}`  {clue}")
+    for guess, feedback in puzzle["feedback"].items():
+        st.markdown(f"`{guess}`  {r1.clue_text(feedback)}")
 
-    typed_key = _key(code, f"typed_{number}")
-    typed = st.session_state.setdefault(typed_key, "")
-    shown = list(typed) + ["_"] * (4 - len(typed))
-    _html(art.img(art.padlock(shown), width="200px"))
-
-    # A phone-style keypad: 1-9, then ⌫ 0 🔓
-    rows = [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], ["⌫", "0", "🔓"]]
-    for r, row in enumerate(rows):
-        for column, key in zip(_grid(f"keypad_{number}_{r}", 3), row):
-            if key == "🔓":
-                if column.button("🔓 Unlock", key=f"unlock_{number}", type="primary",
-                                 width="stretch", disabled=len(typed) != 4):
-                    _submit(code, me, number, typed)
-            elif key == "⌫":
-                if column.button("⌫", key=f"back_{number}", width="stretch", disabled=not typed):
-                    st.session_state[typed_key] = typed[:-1]
-                    st.rerun(scope="fragment")
-            elif column.button(key, key=f"digit_{number}_{key}", width="stretch",
-                               disabled=len(typed) == 4):
-                st.session_state[typed_key] = typed + key
-                st.rerun(scope="fragment")
+    _html(art.img(art.padlock(["?", "?", "?", "?"]), width="190px"))
+    with st.form(_key(code, f"lock_form_{number}"), border=False):
+        typed = st.text_input("Type the 4-digit code", max_chars=4, placeholder="e.g. 1234",
+                              key=_key(code, f"typed_{number}"))
+        if st.form_submit_button("Unlock", type="primary", width="stretch"):
+            _submit(code, me, number, typed)
 
 
-def _pattern(code, me, number):
+def _pattern(code, me, number, puzzle):
     st.write("Every row and every column has each shape once and each colour once. "
              "**Tap the tile that fills the gap**, then lock in.")
-    _html(art.img(art.wall(r1.PATTERN_GRID), width="320px"))
+    _html(art.img(art.wall(puzzle["grid"]), width="320px"))
 
     picked_key = _key(code, f"pattern_{number}")
     picked = st.session_state.get(picked_key)
     columns = _grid(f"pattern_{number}", 4)
-    for column, (option, (shape, colour)) in zip(columns, r1.PATTERN_OPTIONS.items()):
+    for column, (option, (shape, colour)) in zip(columns, puzzle["options"].items()):
         with column:
             chosen = option == picked
             if _picture_button(f"pattern_{number}_{option}", art.tile(shape, colour),
@@ -239,40 +227,38 @@ def _pattern(code, me, number):
         _submit(code, me, number, picked)
 
 
-def _escape_route(code, me, number):
-    with st.expander("📜 The rules of the house", expanded=True):
-        for clue in r1.ESCAPE_CLUES:
-            st.markdown(f"- {clue}")
+def _escape_route(code, me, number, puzzle):
+    _html(art.panel("rules", "The rules of the house", r1.ESCAPE_CLUES))
     route_key = _key(code, f"route_{number}")
     route = st.session_state.get(route_key, [])
     here = route[-1] if route else "Start"
     st.markdown("**Your path:** " + " → ".join(["Start"] + route))
     st.caption("Tap a door to go through it. There's no going back.")
 
-    doors = r1.ESCAPE_MAP[here]
+    doors = puzzle["map"][here]
     columns = _grid(f"doors_{number}_{art.css_key(here)}", len(doors))
     for column, room in zip(columns, doors):
         with column:
             if _picture_button(f"door_{number}_{here}_{room}", art.room(room), room, height=130):
                 new_route = route + [room]
-                if room in r1.ESCAPE_MAP:          # not a dead end yet: keep walking
+                if room in puzzle["map"]:          # not a dead end yet: keep walking
                     st.session_state[route_key] = new_route
                     st.rerun(scope="fragment")
                 else:
                     st.session_state[route_key] = []
                     _submit(code, me, number, new_route)
-            st.caption(r1.ESCAPE_ROOMS[room])
+            st.caption(puzzle["rooms"][room])
 
 
-def _memory(tour, code, me, number, now):
+def _memory(tour, code, me, number, now, puzzle):
     if r1.memory_items_visible(tour, me, now):
         st.write(f"**Remember these!** They hide after {r1.MEMORY_SHOW_SECONDS} seconds.")
         _html(art.row([(art.item(name), name) for name in r1.MEMORY_ITEMS], columns=5))
         return
 
     st.write("Now only these are left:")
-    _html(art.row([(art.item(name), name) for name in r1.MEMORY_REMAINING], columns=7))
-    need = len(r1.MEMORY_MISSING)
+    _html(art.row([(art.item(name), name) for name in puzzle["remaining"]], columns=7))
+    need = len(puzzle["missing"])
     st.write(f"**Which {need} vanished? Tap {need} objects**, then lock in.")
 
     picked_key = _key(code, f"memory_{number}")
@@ -297,97 +283,133 @@ def _memory(tour, code, me, number, now):
 
 def _tiebreak(tour, code, me, now):
     opponent = rules.opponent_of(tour, me)
-    st.title("⚖️ It's a tie!")
+    _html(art.heading("tiebreak", "It's a tie!", size=44, level=1))
     st.markdown(f"Neither you nor {common.player_label(opponent)} got a game right. "
                 "One question decides it. If you're both right, the faster one wins.")
     seconds = r1.tiebreak_seconds_left(tour, me, now)
-    st.markdown(f"### ⏱️ {seconds}s")
+    _html(art.heading("timer", f"{seconds}s"))
     st.progress(seconds / r1.TIEBREAK_SECONDS)
-    st.info(r1.TIEBREAK_QUESTION)
+    _html(art.panel("rules", "The question", [r1.TIEBREAK_QUESTION]))
     with st.form(_key(code, "tiebreak_form")):
         value = st.text_input("Your answer", max_chars=4)
         if st.form_submit_button("Lock it in", type="primary"):
-            _, message = storage.update(code, r1.answer_tiebreak, me, value, time.time())
-            st.toast(message)
+            storage.update(code, r1.answer_tiebreak, me, value, time.time())
             st.rerun()
 
 
 # --- waiting room --------------------------------------------------------------
 
-_WAITING_ANIMATION = """
-<style>
-.mm-wait { text-align:center; padding: 1.5rem 0 0.5rem; }
-.mm-glass { display:inline-block; font-size:4.5rem; animation: mm-search 2.4s ease-in-out infinite; }
-.mm-prints { font-size:1.4rem; letter-spacing:0.8rem; opacity:0.6; }
-.mm-prints span { animation: mm-fade 2.4s infinite; }
-.mm-prints span:nth-child(2) { animation-delay: .4s } .mm-prints span:nth-child(3) { animation-delay: .8s }
-.mm-prints span:nth-child(4) { animation-delay: 1.2s } .mm-prints span:nth-child(5) { animation-delay: 1.6s }
-@keyframes mm-search { 0%,100% { transform: translateX(-70px) rotate(-12deg); }
-                       50% { transform: translateX(70px) rotate(12deg); } }
-@keyframes mm-fade { 0%,100% { opacity: .15 } 50% { opacity: 1 } }
-</style>
-<div class="mm-wait">
-  <div class="mm-glass">🔍</div>
-  <div class="mm-prints"><span>👣</span><span>👣</span><span>👣</span><span>👣</span><span>👣</span></div>
-</div>
-"""
 
 
-def _waiting(tour, me, now):
-    st.title("Case file closed")
-    st.markdown(f"You got **{r1.points(tour, me)}/4** right in **{r1.total_seconds(tour, me)}s**. "
-                "Now we wait for the others…")
-    for game, result in zip(r1.order_of(tour, me), tour["round1"]["players"][me]["results"]):
-        mark = "⏰" if result["timed_out"] else ("✅" if result["correct"] else "❌")
-        st.caption(f"{mark} {r1.GAMES[game]} · {result['seconds']}s")
-    # Static HTML only: no player names in here, so nothing typed by a player gets in.
-    _html(_WAITING_ANIMATION)
+def _waiting(tour, code, me, now):
+    _html(art.heading("solutions", "Case file closed", size=44, level=1))
+    st.markdown(f"You finished all four games in **{r1.total_seconds(tour, me)}s**. "
+                "The verdict comes when every detective is done…")
+    _race_track(tour, code, me, now)
     _html(f"<p style='text-align:center'><em>{WAITING_LINES[int(now / 3) % len(WAITING_LINES)]}</em></p>")
-
     done = r1.finished_count(tour)
     total = len(tour["round1"]["players"])
-    st.progress(done / total, text=f"{done} of {total} detectives have finished")
+    st.caption(f"{done} of {total} detectives have finished")
+
+
+def _race_track(tour, code, me, now):
+    """Everyone on one track, sliding forward as they get through their games.
+    Shows how far along each detective is, never whether they were right."""
+    last_key = _key(code, "race_last")
+    last = st.session_state.get(last_key, {})
+    runners, now_positions = [], {}
+    for player in tour["players"]:
+        pid = player["id"]
+        if pid not in tour["round1"]["players"]:
+            continue
+        position = r1.progress(tour, pid, now)
+        now_positions[pid] = position
+        name = player["name"] + (" (left)" if r1.has_left(tour, pid) else "")
+        runners.append({"name": name, "from": last.get(pid, position), "to": position,
+                        "me": pid == me, "done": r1.is_done(tour, pid)})
+    st.session_state[last_key] = now_positions
+    _html(art.race_track(runners, uid=f"{int(now * 10)}"))
+
+
+@st.fragment
+def _host_controls(code, me):
+    """Only the host sees this, once their own games are done. Drawn once and only
+    redrawn when the host taps something, so the buttons don't get lost."""
+    now = time.time()
+    tour = storage.load(code)
+    if tour is None or tour["status"] != "round1":
+        return
+    still_playing = [p for p in tour["players"] if p["id"] in tour["round1"]["players"]
+                     and not r1.is_done(tour, p["id"])
+                     and tour["round1"]["results"][r1.duel_index(tour, p["id"])] is None]
+    confirm_key = _key(code, "host_confirm")
+    confirm = st.session_state.get(confirm_key)
+
+    st.divider()
+    _html(art.heading("rules", "Host controls", size=28, level=4))
+    st.caption("Only you can see this. Use it if someone has left, or to stop waiting for the timers.")
+
+    for player in still_playing:
+        left, right = _grid(f"host_{player['id']}", 2)
+        left.markdown(f"{common.player_label(player)} is still playing")
+        if confirm == ("left", player["id"]):
+            if right.button("Yes, they left", key=f"left_yes_{player['id']}", type="primary", width="stretch"):
+                storage.update(code, r1.player_left, me, player["id"], time.time())
+                st.session_state[confirm_key] = None
+                st.rerun()
+        elif right.button("Left the game", key=f"left_{player['id']}", width="stretch"):
+            st.session_state[confirm_key] = ("left", player["id"])
+            st.rerun(scope="fragment")
+
+    if confirm == ("end",):
+        st.warning("End Round 1 now? Every unfinished game counts as not answered.")
+        yes, no = _grid("host_end_confirm", 2)
+        if yes.button("Yes, end it", key="end_yes", type="primary", width="stretch"):
+            storage.update(code, r1.end_round_now, me, time.time())
+            st.session_state[confirm_key] = None
+            st.rerun()
+        if no.button("Cancel", key="end_no", width="stretch"):
+            st.session_state[confirm_key] = None
+            st.rerun(scope="fragment")
+    elif st.button("End the round now", key="end_round", width="stretch"):
+        st.session_state[confirm_key] = ("end",)
+        st.rerun(scope="fragment")
 
 
 # --- results ---------------------------------------------------------------------
 
-_HOW = {"more right answers": "more right answers", "faster": "faster",
-        "tie-breaker": "won the tie-breaker", "tie-breaker speed": "faster on the tie-breaker",
-        "draw": "decided by a draw"}
-
-
 def _results(tour, me):
     st.title("Which detectives made it out?")
     if me in tour["eliminated"]:
-        st.error("💀 You've been eliminated. Stay and watch the rest of the game!")
+        _html(art.banner("eliminated", "You've been eliminated. Stay and watch the rest of the game!", good=False))
     else:
-        st.success("🎉 You're through to Round 2!")
+        _html(art.banner("through", "You're through to Round 2!"))
 
     cards = []
     for number, result in enumerate(tour["round1"]["results"], start=1):
         w, l = result["winner"], result["loser"]
         winner = rules.find_player(tour, w)
         loser = rules.find_player(tour, l)
-        detail = (f" · {result['points'][w]}/4 in {result['seconds'][w]}s · "
-                  f"{_HOW[result['decided_by']]}")
-        cards.append(common.result_duel_card(number, winner, loser, detail))
+        cards.append(common.result_duel_card(number, winner, loser))
     st.markdown("<div class='mm-results-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
 
     st.divider()
-    _solutions()
+    _solutions(tour)
 
 
-def _solutions():
+def _solutions(tour):
     """Round 1 is over, so everyone gets to see what the answers were."""
-    with st.expander("🔎 The solutions", expanded=True):
-        shape, colour = r1.PATTERN_OPTIONS[r1.PATTERN_ANSWER]
-        st.markdown(f"**🔐 Number Lock:** the code was **{r1.NUMBER_LOCK_ANSWER}**.")
-        left, right = _grid("solution_pattern", 2)
-        colour_name = {"royal": "royal blue", "ice": "ice blue"}.get(colour, colour)
-        left.markdown(f"**🧩 Pattern Wall:** tile **{r1.PATTERN_ANSWER}**, the {colour_name} {shape}.")
-        with right:
-            _html(art.img(art.tile(shape, colour), width="70px"))
-        st.markdown("**🗺️ Escape Route:** " + " → ".join(["Start"] + r1.ESCAPE_ANSWER)
-                    + ". Breakfast, chimes, the piano's guard and the fireplace rule ruled out every other way.")
-        st.markdown("**🃏 Memory Table:** these vanished:")
-        _html(art.row([(art.item(name), name) for name in r1.MEMORY_MISSING], columns=5))
+    lock, wall = r1.puzzle(tour, "number_lock"), r1.puzzle(tour, "pattern")
+    route, memory = r1.puzzle(tour, "escape_route"), r1.puzzle(tour, "memory")
+    shape, colour = wall["options"][wall["answer"]]
+    colour_name = {"royal": "royal blue", "ice": "ice blue"}.get(colour, colour)
+    _html(art.heading("solutions", "The solutions"))
+    _html(f"<p>{art.icon('number_lock', 24)}<b>Number Lock:</b> the code was <b>{lock['answer']}</b>.</p>")
+    _html(f"<p style='display:flex;align-items:center;gap:.4rem'>{art.icon('pattern', 24)}"
+          f"<span><b>Pattern Wall:</b> tile <b>{wall['answer']}</b>, the {colour_name} {shape}.</span>"
+          f"{art.img(art.tile(shape, colour), width='48px')}</p>")
+    _html(f"<p>{art.icon('escape_route', 24)}<b>Escape Route:</b> "
+          + " → ".join(["Start"] + route["answer"])
+          + ". Food, ticking or chiming, the guard at the piano and the fireplace rule ruled out every other way.</p>")
+    _html(f"<p>{art.icon('memory', 24)}<b>Memory Table:</b> these vanished:</p>")
+    _html(art.row([(art.item(name), name) for name in memory["missing"]], columns=5))
