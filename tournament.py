@@ -45,7 +45,7 @@ def clean_name(name):
     return name, None
 
 
-def new_tournament(code, host_id, host_name):
+def new_tournament(code, host_id, host_name, appearance=None):
     """Creates a lobby with the host as its first player. Returns (tournament, message);
     the tournament is None if the host's name is refused."""
     name, problem = clean_name(host_name)
@@ -55,7 +55,7 @@ def new_tournament(code, host_id, host_name):
         "code": code,
         "status": "lobby",
         "host_id": host_id,
-        "players": [{"id": host_id, "name": name, "appearance": None}],
+        "players": [{"id": host_id, "name": name, "appearance": appearance}],
         "duels": [],
         "eliminated": [],
         "round1": None,
@@ -76,7 +76,7 @@ def is_host(tournament, player_id):
     return player_id is not None and player_id == tournament["host_id"]
 
 
-def join(tournament, player_id, name):
+def join(tournament, player_id, name, appearance=None):
     """A new player joins the lobby."""
     if tournament["status"] != "lobby":
         return tournament, "This tournament has already started."
@@ -92,7 +92,7 @@ def join(tournament, player_id, name):
         return tournament, f"Someone is already called {name}. Pick another name."
 
     new = copy.deepcopy(tournament)
-    new["players"].append({"id": player_id, "name": name, "appearance": None})
+    new["players"].append({"id": player_id, "name": name, "appearance": appearance})
     return new, f"Welcome, {name}!"
 
 

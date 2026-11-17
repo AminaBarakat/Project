@@ -56,10 +56,11 @@ def _live_round(code, me):
 # --- intro ------------------------------------------------------------------------
 
 def _intro(tour, me, now):
-    st.title("Round 1: the Challenge Board")
+    st.title("Round 1: The Challenge Board")
     opponent = rules.opponent_of(tour, me)
     you = rules.find_player(tour, me)
-    st.markdown(f"## {common.player_label(you)}  ⚔️  {common.player_label(opponent)}")
+    st.markdown("### Your first suspect is… your opponent.")
+    st.markdown(common.duel_card(you, opponent), unsafe_allow_html=True)
     left = max(0, int(tour["round1"]["starts_at"] - now + 0.999))
     st.markdown(f"### Starting in {left}…")
     st.caption("Four challenges, three minutes, one point each. Highest score goes through.")
@@ -258,20 +259,20 @@ _HOW = {"score": "", "tie-breaker": " · won the tie-breaker",
 
 
 def _results(tour, me, now):
-    st.title("Round 1 results")
+    st.title("Which detectives made it out?")
     if me in tour["eliminated"]:
         st.error("💀 You've been eliminated. Stay and watch the rest of the game!")
     else:
         st.success("🎉 You're through to Round 2!")
 
+    cards = []
     for number, result in enumerate(tour["round1"]["results"], start=1):
         winner = rules.find_player(tour, result["winner"])
         loser = rules.find_player(tour, result["loser"])
         points = result["points"]
-        st.markdown(
-            f"**Duel {number}:** ✅ {common.player_label(winner)} ({points[result['winner']]})  vs  "
-            f"~~{common.player_label(loser)}~~ ({points[result['loser']]}) · ELIMINATED{_HOW[result['decided_by']]}"
-        )
+        how = f" · {points[result['winner']]}–{points[result['loser']]}{_HOW[result['decided_by']]}"
+        cards.append(common.result_duel_card(number, winner, loser, how))
+    st.markdown("<div class='mm-results-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
 
     left = r1.results_seconds_left(tour, now)
     st.divider()

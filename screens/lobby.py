@@ -41,12 +41,12 @@ def live_players(code, me):
 
     for player in tour["players"]:
         left, right = st.columns([4, 1], vertical_alignment="center")
-        label = common.player_label(player)
+        label = common.profile_card(player)
         if player["id"] == tour["host_id"]:
-            label += " · host"
+            label += "<div style='text-align:center; color:#d6b7eb'>host</div>"
         if player["id"] == me:
-            label += " · **you**"
-        left.markdown(label)
+            label += "<div style='text-align:center; color:#d6b7eb'>you</div>"
+        left.markdown(label, unsafe_allow_html=True)
         if host and player["id"] != me:
             if right.button("Remove", key=f"remove_{player['id']}"):
                 _, message = storage.update(code, rules.remove_player, me, player["id"])
