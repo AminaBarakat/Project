@@ -394,22 +394,24 @@ def _results(tour, me):
     st.markdown("<div class='mm-results-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
 
     st.divider()
-    _solutions(tour)
+    _scoreboard(tour, me)
 
 
-def _solutions(tour):
-    """Round 1 is over, so everyone gets to see what the answers were."""
-    lock, wall = r1.puzzle(tour, "number_lock"), r1.puzzle(tour, "pattern")
-    route, memory = r1.puzzle(tour, "escape_route"), r1.puzzle(tour, "memory")
-    shape, colour = wall["options"][wall["answer"]]
-    colour_name = {"royal": "royal blue", "ice": "ice blue"}.get(colour, colour)
-    _html(art.heading("solutions", "The solutions"))
-    _html(f"<p>{art.icon('number_lock', 24)}<b>Number Lock:</b> the code was <b>{lock['answer']}</b>.</p>")
-    _html(f"<p style='display:flex;align-items:center;gap:.4rem'>{art.icon('pattern', 24)}"
-          f"<span><b>Pattern Wall:</b> tile <b>{wall['answer']}</b>, the {colour_name} {shape}.</span>"
-          f"{art.img(art.tile(shape, colour), width='48px')}</p>")
-    _html(f"<p>{art.icon('escape_route', 24)}<b>Escape Route:</b> "
-          + " → ".join(["Start"] + route["answer"])
-          + ". Food, ticking or chiming, the guard at the piano and the fireplace rule ruled out every other way.</p>")
-    _html(f"<p>{art.icon('memory', 24)}<b>Memory Table:</b> these vanished:</p>")
-    _html(art.row([(art.item(name), name) for name in memory["missing"]], columns=5))
+def _scoreboard(tour, me):
+    """How every detective did in the four games (never the answers themselves),
+    best first: most right answers, then fastest."""
+    rows = []
+    for player in tour["players"]:
+        pid = player["id"]
+        if pid not in tour["round1"]["players"]:
+            continue
+        marks = {}
+        for game, result in zip(r1.order_of(tour, pid), tour["round1"]["players"][pid]["results"]):
+            marks[game] = "time" if result["timed_out"] else ("right" if result["correct"] else "wrong")
+        rows.append({"name": player["name"] + (" (left)" if r1.has_left(tour, pid) else ""),
+                     "marks": marks, "points": r1.points(tour, pid),
+                     "seconds": r1.total_seconds(tour, pid), "me": pid == me,
+                     "out": pid in tour["eliminated"]})
+    rows.sort(key=lambda r: (-r["points"], r["seconds"]))
+    _html(art.heading("solutions", "How everyone did"))
+    _html(art.scoreboard(rows, list(r1.GAMES)))
