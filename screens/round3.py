@@ -13,11 +13,26 @@ import tournament as rules
 from screens import common
 
 DETECTIVE_IMAGE = Path(__file__).resolve().parents[1] / "assets" / "detective-purple.png"
+ASSETS = Path(__file__).resolve().parents[1] / "assets"
+CASE_IMAGES = {
+    "Nova": ASSETS / "suspect-nova.png",
+    "Theo": ASSETS / "suspect-theo.png",
+    "Mira": ASSETS / "suspect-mira.png",
+    "Library": ASSETS / "room-library.png",
+    "Observatory": ASSETS / "room-observatory.png",
+    "Conservatory": ASSETS / "room-conservatory.png",
+}
 
 
 def _detective_data_url():
     """A local asset as a data URL so it also works after Streamlit deployment."""
     encoded = base64.b64encode(DETECTIVE_IMAGE.read_bytes()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
+def _image_data_url(path):
+    """Embed supplied case-file art so Streamlit Cloud can render it too."""
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
     return f"data:image/png;base64,{encoded}"
 
 
@@ -44,9 +59,19 @@ def _story_style():
     .r3-avatar-ring { align-items: center; background: linear-gradient(145deg, #ffffff, #aeb4c0 42%, #fbfdff 66%, #777f8b);
       border-radius: 50%; box-shadow: 0 0 0 3px rgba(183, 147, 235, .55), 0 5px 18px rgba(0,0,0,.5); display: flex;
       height: 64px; justify-content: center; margin: 0 auto .45rem; padding: 4px; width: 64px; }
+    .r3-avatar-ring img { border-radius:50%; height:100%; object-fit:contain; width:100%; }
     .r3-avatar-face { align-items: center; background: radial-gradient(circle at 38% 28%, #4e596c, #171426 72%); border-radius: 50%;
       color: #e9eef5; display: flex; font-size: 1.55rem; height: 100%; justify-content: center; width: 100%; }
     .r3-finalists-title { color: #d7b8f2; font-size: .72rem; font-weight: 700; letter-spacing: .16em; text-align: center; }
+    .r3-case-intro { color:#d9c2ec; font-family:Georgia,serif; font-size:1.08rem; margin:.15rem 0 1rem; }
+    .r3-case-section { color:#e3c9ff; font-family:Cinzel, Georgia, serif; font-size:.9rem; font-weight:800; letter-spacing:.08em; margin:1.25rem 0 .55rem; }
+    .r3-case-grid { display:grid; gap:.8rem; grid-template-columns:repeat(3, minmax(0, 1fr)); }
+    .r3-case-card { background:rgba(19,8,39,.58); border:1px solid rgba(220,190,255,.38); border-radius:16px; overflow:hidden; padding:.45rem; text-align:center; }
+    .r3-case-card img { background:#fbf7ff; border-radius:11px; display:block; height:136px; object-fit:contain; width:100%; }
+    .r3-case-card span { color:#f8f2ff; display:block; font-family:ui-sans-serif, system-ui, sans-serif; font-weight:800; padding:.45rem .15rem .12rem; }
+    .r3-object-card { align-items:center; background:rgba(19,8,39,.58); border:1px solid rgba(220,190,255,.38); border-radius:16px; display:flex; gap:.55rem; justify-content:center; min-height:82px; padding:.6rem; }
+    .r3-object-card b { color:#f8f2ff; font-family:ui-sans-serif, system-ui, sans-serif; }
+    @media (max-width: 620px) { .r3-case-grid { grid-template-columns:1fr; } .r3-case-card img { height:175px; } }
     @media (max-width: 620px) { .r3-scene { grid-template-columns: 1fr; gap: 0; padding: .2rem 1rem 0; }
       .r3-detective { width: 180px; margin-bottom: -1rem; } .r3-speech { min-height: 170px; } }
     @keyframes r3-bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-7px) } }
@@ -114,8 +139,9 @@ def _finalist_profiles(tour):
     for player_id in tour["round3"]["finalists"]:
         player = rules.find_player(tour, player_id)
         name = html.escape(player["name"])
+        _, path = common.AVATARS.get(player.get("appearance"), common.AVATARS["girl"])
         profiles.append(
-            f"<div class='r3-finalist'><div class='r3-avatar-ring'><div class='r3-avatar-face'>🕵️</div></div>{name}</div>"
+            f"<div class='r3-finalist'><div class='r3-avatar-ring'><img src='{common.avatar_data_url(path)}' alt=''></div>{name}</div>"
         )
     return "".join(profiles)
 
@@ -129,7 +155,22 @@ def _mystery(tour, code, me, now):
     st.progress(left / r3.ROUND_SECONDS)
 
     st.subheader("Case file")
-    st.markdown("**Suspects:** Nova · Theo · Mira  \n**Rooms:** Library · Observatory · Conservatory  \n**Objects:** Key · Map · Flashlight")
+    st.markdown("<div class='r3-case-intro'>Study the people, the rooms, and the clues before you present your theory.</div>", unsafe_allow_html=True)
+    suspects = "".join(
+        f"<div class='r3-case-card'><img src='{_image_data_url(CASE_IMAGES[name])}' alt='{name}'><span>{name}</span></div>"
+        for name in r3.SUSPECTS
+    )
+    rooms = "".join(
+        f"<div class='r3-case-card'><img src='{_image_data_url(CASE_IMAGES[name])}' alt='{name}'><span>{name}</span></div>"
+        for name in r3.ROOMS
+    )
+    objects = "".join(
+        f"<div class='r3-object-card'><span>{icon}</span><b>{name}</b></div>"
+        for name, icon in (("Key", "🗝️"), ("Map", "🗺️"), ("Flashlight", "🔦"))
+    )
+    st.markdown("<div class='r3-case-section'>Suspects</div><div class='r3-case-grid'>" + suspects + "</div>", unsafe_allow_html=True)
+    st.markdown("<div class='r3-case-section'>Rooms</div><div class='r3-case-grid'>" + rooms + "</div>", unsafe_allow_html=True)
+    st.markdown("<div class='r3-case-section'>Objects</div><div class='r3-case-grid'>" + objects + "</div>", unsafe_allow_html=True)
     for number, clue in enumerate(r3.CLUES, start=1):
         st.markdown(f"{number}. {clue}")
 
