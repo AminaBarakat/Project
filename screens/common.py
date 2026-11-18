@@ -142,21 +142,15 @@ def avatar_picker(key, unavailable=()):
 .st-key-{key}_grid {{ gap: .5rem !important; }}
 .st-key-{key}_grid [data-testid="stHorizontalBlock"] {{ flex-wrap: nowrap !important; gap: .5rem !important; }}
 .st-key-{key}_grid [data-testid="stColumn"] {{ min-width: 0 !important; width: auto !important; flex: 1 1 0 !important; }}
-.st-key-{key}_grid div.stButton > button {{ position: relative; width: 100%; aspect-ratio: 1 / 1; min-height: 0 !important;
-  padding: 0 !important; border-radius: 14px !important; border: 1px solid rgba(255,255,255,.14) !important;
+.st-key-{key}_grid [data-testid="stImage"] {{ border-radius: 14px 14px 0 0; overflow: hidden;
+  background: radial-gradient(circle at 50% 30%, #4b2a86, #1d1438 75%); }}
+.st-key-{key}_grid [data-testid="stImage"] img {{ aspect-ratio: 1 / 1; object-fit: contain; }}
+.st-key-{key}_grid div.stButton > button {{ position: relative; width: 100%; min-height: 2.2rem !important;
+  padding: .25rem !important; border-radius: 0 0 14px 14px !important; border: 1px solid rgba(255,255,255,.14) !important;
   box-shadow: none !important; transition: transform .15s ease, box-shadow .15s ease; }}
 .st-key-{key}_grid div.stButton > button:hover {{ transform: translateY(-3px); box-shadow: 0 0 16px rgba(181,123,255,.5) !important; }}
-.st-key-{key}_grid div.stButton > button p {{ font-size: 0 !important; }}
 .st-key-{key}_grid div.stButton > button:disabled {{ opacity: 1 !important; filter: grayscale(1) brightness(.55); cursor: not-allowed; }}
-.st-key-{key}_grid div.stButton > button:disabled::after {{ content: 'taken'; position: absolute; left: 0; right: 0; bottom: 3px;
-  color: #e4e7efcc; font-size: .62rem; font-weight: 700; }}
 .st-key-{key}_grid [data-testid="stHorizontalBlock"] + [data-testid="stHorizontalBlock"] {{ margin-top: .5rem; }}"""]
-    for option in options:
-        _, path = AVATARS[option]
-        picture = avatars.thumbnail(path, 200)
-        selector = f".st-key-{key}_{option} div.stButton > button"
-        css.append(f"{selector} {{ background: url('{picture}') center bottom / auto 90% no-repeat, "
-                   "radial-gradient(circle at 50% 30%, #4b2a86, #1d1438 75%) !important; }")
     css.append(f""".st-key-{key}_{chosen} div.stButton > button {{ border: 2px solid #9be4ff !important;
   box-shadow: 0 0 16px rgba(155,228,255,.55) !important; }}
 .st-key-{key}_{chosen} div.stButton > button::after {{ content: '✓'; position: absolute; top: 3px; right: 7px;
@@ -168,8 +162,11 @@ def avatar_picker(key, unavailable=()):
         for start in range(0, len(options), 4):
             columns = st.columns(4)
             for column, option in zip(columns, options[start:start + 4]):
-                label, _ = AVATARS[option]
+                label, path = AVATARS[option]
                 with column:
+                    # Real image elements survive Streamlit reruns; CSS-only
+                    # backgrounds on keyed widgets did not reliably do so.
+                    st.image(avatars.thumbnail(path, 200), width="stretch")
                     if st.button(label, key=f"{key}_{option}", width="stretch", disabled=option in unavailable,
                                  help=label):
                         st.session_state[choice_key] = option
