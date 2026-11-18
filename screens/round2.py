@@ -8,7 +8,7 @@ import streamlit as st
 import round2 as rules
 import storage
 import tournament
-from screens import common
+from screens import art, common
 
 REFRESH = "2s"
 
@@ -125,15 +125,40 @@ def _map(code, me, view):
 
 
 def _end_screen(code, tour, me, view):
-    st.title("Round 2 results")
+    st.title("Which duo made it out?")
+    finalists = tour["round2"]["duos"][tour["round2"]["winner"]]["players"]
+    winner_players = [tournament.find_player(tour, player_id) for player_id in finalists]
+
     if view.get("duo_id") is None:
-        st.info("You were eliminated in Round 1. The Duo Vault Challenge is over.")
-        return
+        st.markdown(art.banner("eliminated", "You were eliminated in Round 1. Stay and watch the rest of the game!", good=False),
+                    unsafe_allow_html=True)
+    elif view.get("advanced"):
+        st.markdown(art.banner("through", "Your duo made it through to the final!"), unsafe_allow_html=True)
+    else:
+        st.markdown(art.banner("eliminated", "Your duo was eliminated. Stay and watch the final!", good=False),
+                    unsafe_allow_html=True)
+
+    winners_html = "".join(common.profile_card(player, "passed") for player in winner_players)
+    st.markdown(
+        "<style>"
+        ".mm-r2-winners .mm-result-duel{padding:1.2rem .9rem}"
+        ".mm-r2-winners .mm-result-duel-title{font-size:1.05rem;margin-bottom:1rem}"
+        ".mm-r2-winners .mm-result-pair{gap:clamp(1rem,5vw,3rem)}"
+        ".mm-r2-winners .mm-result-pair .mm-profile-photo{width:132px;height:132px}"
+        ".mm-r2-winners .mm-profile-name{font-size:1.08rem;margin-top:.3rem}"
+        ".mm-r2-winners .mm-profile-status{font-size:.92rem;margin-top:.35rem}"
+        "@media(max-width:560px){.mm-r2-winners .mm-result-pair .mm-profile-photo{width:104px;height:104px}}"
+        "</style>"
+        "<div class='mm-r2-winners'><div class='mm-results-grid' "
+        "style='grid-template-columns:minmax(340px, 600px);justify-content:center'>"
+        "<div class='mm-result-duel'><div class='mm-result-duel-title'>The winning duo</div>"
+        f"<div class='mm-result-pair'>{winners_html}</div></div></div></div>",
+        unsafe_allow_html=True,
+    )
+
     if view.get("advanced"):
-        st.success("Your duo advanced to the final!")
         if view.get("decided_by") == "timeout":
             st.caption("The timer ended; the code, alarms, and tie-break draw decided the result.")
-        finalists = tour["round2"]["duos"][tour["round2"]["winner"]]["players"]
         if me in finalists and st.button("Start Round 3: Final Mansion Mystery", type="primary"):
             after, message = storage.update(
                 code, tournament.start_round3, me, finalists, time.time()
@@ -141,8 +166,6 @@ def _end_screen(code, tour, me, view):
             if after is not None and after["status"] == "round3":
                 st.rerun(scope="app")
             st.error(message)
-    else:
-        st.error("Your duo was eliminated. The other duo advances to the final.")
     if view.get("decided_by") == "timeout":
         st.caption("The round ended at its server-set three-minute limit.")
 

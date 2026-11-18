@@ -39,13 +39,14 @@ def show(code, me):
     if tour is None or tour["status"] not in ("round1", "round1_results"):
         st.rerun()                            # Round 2, or the tournament vanished
 
+    _stamp_if_moved_on(code, tour, me)
     phase = r1.phase(tour, me, now)
     if phase == "intro":
         _intro(tour, me)
         _redraw_at(tour["round1"]["starts_at"], "Starting in {}…")
     elif phase == "playing":
         _game_header(tour, me, now)
-        _redraw_when_due(_deadlines(tour, me, now))
+        _live_strip(code, me, _deadlines(tour, me, now))
         _game(code, me)
     elif phase == "results":
         _results(code, tour, me)
@@ -82,10 +83,50 @@ def _deadlines(tour, me, now):
 
 
 @st.fragment(run_every="1s")
-def _redraw_when_due(moments):
-    """Invisible: draws nothing, and redraws the page once one of the moments has passed."""
+def _live_strip(code, me, moments):
+    """The slim race strip above the game: you vs your opponent, updated every second
+    (how far along each of you is, never right or wrong). It also redraws the whole
+    page once one of the moments has passed. It has no buttons, so taps in the game
+    below can't get lost."""
     if time.time() >= min(moments):
         st.rerun()
+    tour = storage.load(code)
+    opponent = rules.opponent_of(tour, me) if tour else None
+    if opponent is None:
+        return
+    now = time.time()
+    _html(art.duel_race(_racer(tour, me, now), _racer(tour, opponent["id"], now)))
+
+
+def _racer(tour, pid, now):
+    player = rules.find_player(tour, pid)
+    status = ("left" if r1.has_left(tour, pid)
+              else "finished" if r1.is_done(tour, pid) else "playing")
+    return {"name": player["name"], "picture": _picture(player),
+            "progress": r1.progress(tour, pid, now), "status": status}
+
+
+def _picture(player):
+    """The player's avatar image, ready to put in our own HTML."""
+    _, path = common.AVATARS.get(player.get("appearance") or "girl", common.AVATARS["girl"])
+    return common.avatar_data_url(path)
+
+
+def _stamp_if_moved_on(code, tour, me):
+    """A big LOCKED IN stamp after you answer, or TIME'S UP when the clock ran out.
+    Shown once, on the first page draw after one of your games ends."""
+    player = tour["round1"]["players"].get(me)
+    if player is None:
+        return
+    results = player["results"]
+    key = _key(code, "games_seen")
+    seen = st.session_state.get(key)
+    st.session_state[key] = len(results)
+    if seen is not None and len(results) > seen:
+        if results[-1].get("timed_out"):
+            _html(art.stamp("TIME'S UP", good=False))
+        else:
+            _html(art.stamp("LOCKED IN"))
 
 
 def _game_header(tour, me, now):
@@ -112,7 +153,8 @@ def _waiting_or_tiebreak(code, me):
 
 
 def _html(markup):
-    """Show our own drawings and styles (screens/art.py). Never pass player-typed text in here."""
+    """Show our own drawings and styles (screens/art.py). Never pass player-typed text
+    in here unless it has been escaped (the art.py functions escape names themselves)."""
     st.markdown(markup, unsafe_allow_html=True)
 
 
@@ -147,7 +189,7 @@ def _intro(tour, me):
     opponent = rules.opponent_of(tour, me)
     you = rules.find_player(tour, me)
     st.markdown("### Your first suspect is… your opponent.")
-    st.markdown(common.duel_card(you, opponent), unsafe_allow_html=True)
+    _html(art.vs_intro((you["name"], _picture(you)), (opponent["name"], _picture(opponent))))
     order = r1.order_of(tour, me)
     _html("<p><b>Your four games:</b> " + " &nbsp;→&nbsp; ".join(
         f"{art.icon(g, 22)}{r1.GAMES[g]}" for g in order) + "</p>")
@@ -208,7 +250,7 @@ def _number_lock(code, me, number, puzzle):
         st.markdown(f"`{guess}`  {r1.clue_text(feedback)}")
 
     # The padlock: the loop on top is a drawing, the body is a styled container, and
-    # the text box inside it is styled as the four dial windows (screens/art.py).
+    # the text box inside it is styled as one dark display window (screens/art.py).
     lock_key = art.css_key(f"lock_{number}")
     _html(art.lock_style(lock_key))
     _html('<div style="text-align:center;margin-top:.6rem">'
@@ -400,61 +442,85 @@ def _host_controls(code, me):
 # --- results ---------------------------------------------------------------------
 
 def _results(code, tour, me):
-    st.title("Which detectives made it out?")
-    if me in tour["eliminated"]:
-        _html(art.banner("eliminated", "You've been eliminated. Stay and watch the rest of the game!", good=False))
-    else:
-        _html(art.banner("through", "You're through to Round 2!"))
+    st.title("Who's still on the case?")
 
-    # Round 2 starts when the four detectives going through are all ready.
-    _ready_board(code, me)
-    _ready_buttons(code, me)
-
+    # The duels are revealed one at a time: a drumroll, then ON THE CASE / OFF THE
+    # CASE. The page can be redrawn during the reveal (e.g. someone taps ready), so
+    # we remember when it started and carry on from there instead of restarting.
+    started = st.session_state.setdefault(_key(code, "reveal_started"), time.time())
+    elapsed = time.time() - started
+    total = art.reveal_seconds(len(tour["duels"]))
+    animate = elapsed < total
     cards = []
-    for number, result in enumerate(tour["round1"]["results"], start=1):
-        w, l = result["winner"], result["loser"]
-        winner = rules.find_player(tour, w)
-        loser = rules.find_player(tour, l)
-        cards.append(common.result_duel_card(number, winner, loser))
-    st.markdown("<div class='mm-results-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
+    for i, ((a, b), result) in enumerate(zip(tour["duels"], tour["round1"]["results"])):
+        left, right = rules.find_player(tour, a), rules.find_player(tour, b)
+        delay = art.REVEAL_FIRST + i * art.REVEAL_STEP - elapsed if animate else None
+        cards.append(art.reveal_card(i + 1, (left["name"], _picture(left)), (right["name"], _picture(right)),
+                                     "left" if result["winner"] == a else "right", me in (a, b), delay))
+    _html(art.reveal_style())
+    _html('<div class="mm-rv-grid">' + "".join(cards) + "</div>")
 
-    st.divider()
-    _scoreboard(tour, me)
+    # Everything else appears once the last duel has been revealed.
+    _html(art.after_reveal_style("r1_after_reveal", total - elapsed if animate else 0))
+    with st.container(key="r1_after_reveal"):
+        if me in tour["eliminated"]:
+            _html(art.banner("eliminated", "You're off the case. Stay and watch the rest of the game!", good=False))
+        else:
+            _html(art.banner("through", "You're still on the case: through to Round 2!"))
+        # You get ready by tapping your own card in the lineup.
+        _ready_watch(code, tuple(sorted(r1.ready_players(tour))))
+        _ready_lineup(code, me)
+        _ready_host(code, me)
+        st.divider()
+        _scoreboard(tour, me)
 
 
 @st.fragment(run_every="1s")
-def _ready_board(code, me):
-    """Who is ready for Round 2. Checks every second; when Round 2 begins, the whole
-    page moves on. No buttons in here, so taps can't get lost in the refresh."""
+def _ready_watch(code, seen):
+    """Invisible: checks every second and redraws the page when someone new is
+    ready or Round 2 has begun. Draws nothing, so taps can't get lost in it."""
     tour = storage.load(code)
-    if tour is None or tour["status"] != "round1_results":
+    if tour is None or tour["status"] != "round1_results" or tuple(sorted(r1.ready_players(tour))) != seen:
         st.rerun()
-    ready = set(r1.ready_players(tour))
-    chips = []
-    for pid in r1.advancing(tour):
-        player = rules.find_player(tour, pid)
-        name = "You" if pid == me else player["name"]
-        chips.append((name, pid in ready, pid == me))
-    _html(art.ready_chips(chips))
 
 
 @st.fragment
-def _ready_buttons(code, me):
-    """The "I'm ready" button (players going through) and the host's override.
-    Drawn once and redrawn only when tapped."""
+def _ready_lineup(code, me):
+    """The four detectives going through, side by side. Your own card is a button:
+    tap it and you're ready. Everyone else's card shows READY / NOT READY."""
     tour = storage.load(code)
     if tour is None or tour["status"] != "round1_results":
         return
     going = r1.advancing(tour)
-    if me in going and me not in r1.ready_players(tour):
-        if st.button("I'm ready for Round 2", key="ready_r2", type="primary", width="stretch"):
-            storage.update(code, r1.mark_ready, me, time.time())
-            st.rerun()
+    ready = set(r1.ready_players(tour))
+    _html(art.ready_lineup_style())
+    _html('<div class="mm-rl-title">READY FOR ROUND 2</div>')
+    for column, pid in zip(_grid("ready_lineup", len(going)), going):
+        player = rules.find_player(tour, pid)
+        _, path = common.AVATARS.get(player.get("appearance") or "girl", common.AVATARS["girl"])
+        picture = common.avatar_data_url(path)
+        with column:
+            if pid == me and pid not in ready:
+                _html(art.ready_tap_style("ready_tap", picture))
+                if st.button(common.safe(player["name"]), key="ready_tap", width="stretch"):
+                    storage.update(code, r1.mark_ready, me, time.time())
+                    st.rerun()
+            else:
+                _html(art.ready_card(player["name"], picture, pid in ready, pid == me))
+    if me in going and me not in ready:
+        st.caption("Tap your detective when you're ready for Round 2.")
     elif me in going:
         st.caption("You're ready. Waiting for the other detectives…")
     else:
         st.caption("The four detectives going through are getting ready for Round 2…")
 
+
+@st.fragment
+def _ready_host(code, me):
+    """The host's override: start Round 2 without waiting for everyone."""
+    tour = storage.load(code)
+    if tour is None or tour["status"] != "round1_results":
+        return
     if rules.is_host(tour, me):
         confirm_key = _key(code, "host_start_r2")
         if st.session_state.get(confirm_key):
