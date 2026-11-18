@@ -23,6 +23,11 @@ CASE_IMAGES = {
     "Observatory": ASSETS / "room-observatory.png",
     "Conservatory": ASSETS / "room-conservatory.png",
 }
+EVIDENCE_MARKERS = {
+    "Nova": "3", "Theo": "7", "Mira": "5",
+    "Library": "4", "Observatory": "6", "Conservatory": "1",
+    "Key": "2", "Map": "8", "Flashlight": "9",
+}
 
 
 def _detective_data_url():
@@ -51,7 +56,11 @@ def _story_style():
     .r3-speech { background: rgba(12, 5, 27, .82); border: 1px solid rgba(220, 190, 255, .72); border-radius: 17px;
       box-shadow: 0 12px 35px rgba(0, 0, 0, .3), inset 0 0 28px rgba(135, 66, 193, .15); color: #f7eeff;
       font-family: Georgia, serif; font-size: clamp(1.08rem, 2.3vw, 1.34rem); line-height: 1.62; min-height: 210px; padding: 1.4rem 1.55rem; }
-    .r3-typed-text { white-space:pre-wrap; } .r3-typed-char { animation:r3-type .01s steps(1, end) forwards; animation-delay:calc(var(--i) * .035s); opacity:0; }
+    .r3-typed-text { display:block; }
+    .r3-typed-line { display:block; max-width:100%; overflow:hidden; white-space:nowrap; width:0;
+      animation:r3-type-line 2.1s steps(42, end) forwards; }
+    .r3-typed-line + .r3-typed-line { margin-top:.8rem; animation-delay:2.2s; }
+    .r3-typed-line + .r3-typed-line + .r3-typed-line { animation-delay:4.4s; }
     .r3-cursor { color: #e6a7ff; animation: r3-blink .75s step-end infinite; }
     .r3-question { color: #fff; font-family: Georgia, serif; font-size: 1.5rem; font-style: italic; line-height: 1.35;
       padding: 1.2rem .3rem .2rem; text-align: center; }
@@ -71,8 +80,12 @@ def _story_style():
     .r3-case-card { background:rgba(19,8,39,.58); border:1px solid rgba(220,190,255,.38); border-radius:16px; overflow:hidden; padding:.45rem; text-align:center; }
     .r3-case-card img { background:#eee8f3; border-radius:11px; display:block; height:136px; mix-blend-mode:normal; object-fit:contain; width:100%; }
     .r3-case-card span { color:#f8f2ff; display:block; font-family:ui-sans-serif, system-ui, sans-serif; font-weight:800; padding:.45rem .15rem .12rem; }
+    .r3-evidence-marker { align-items:center; background:linear-gradient(135deg,#b76cff,#65e8ff); border:2px solid #f8f2ff; border-radius:50%; box-shadow:0 0 13px rgba(151,220,255,.85); color:#19082e; display:inline-flex; font-family:Cinzel, Georgia, serif; font-size:.76rem; font-weight:900; height:25px; justify-content:center; margin-left:.38rem; vertical-align:middle; width:25px; }
     .r3-object-card { align-items:center; background:rgba(19,8,39,.58); border:1px solid rgba(220,190,255,.38); border-radius:16px; display:flex; gap:.55rem; justify-content:center; min-height:82px; padding:.6rem; }
     .r3-object-card b { color:#f8f2ff; font-family:ui-sans-serif, system-ui, sans-serif; }
+    .r3-vault-lock { background:linear-gradient(135deg,rgba(100,52,170,.8),rgba(25,78,142,.62)); border:1px solid rgba(166,235,255,.76); border-radius:17px; box-shadow:0 0 25px rgba(155,85,255,.34),inset 0 0 25px rgba(194,235,255,.12); margin:1rem 0 .65rem; padding:.9rem 1rem; text-align:center; }
+    .r3-vault-lock-title { color:#fff; font-family:Cinzel, Georgia, serif; font-size:.9rem; font-weight:900; letter-spacing:.08em; }
+    .r3-vault-lock-help { color:#e2d2f6; font-size:.86rem; margin-top:.3rem; }
     .r3-solution-grid { display:grid; gap:.8rem; grid-template-columns:repeat(3, minmax(0, 1fr)); margin:1rem 0 1.35rem; }
     .r3-solution-card { background:rgba(39, 26, 77, .68); border:1px solid rgba(191,225,255,.52); border-radius:16px; overflow:hidden; padding:.5rem; text-align:center; }
     .r3-solution-card img { background:#eee8f3; border-radius:11px; display:block; height:138px; object-fit:contain; width:100%; }
@@ -81,7 +94,15 @@ def _story_style():
     .r3-solution-icon { align-items:center; background:rgba(238,232,243,.9); border-radius:11px; display:flex; font-size:4.2rem; height:138px; justify-content:center; }
     .r3-choice-label { color:#f8f2ff; font-family:ui-sans-serif, system-ui, sans-serif; font-size:1rem; font-weight:800; margin:.9rem 0 .35rem; }
     .r3-choice-help { color:#d9c2ec; font-size:.88rem; margin-bottom:.55rem; }
-    .r3-podium { align-items:end; display:flex; gap:clamp(.55rem, 3vw, 1.4rem); justify-content:center; margin:1.7rem 0 2rem; min-height:300px; }
+    .r3-winner-lineup-title { color:#d7b8f2; font-size:.76rem; font-weight:800; letter-spacing:.16em; margin-top:1rem; text-align:center; }
+    .r3-winner-lineup { align-items:end; display:flex; gap:.55rem; justify-content:center; margin:4.8rem auto 1rem; max-width:850px; }
+    .r3-lineup-player { color:#d8c9e9; flex:1 1 0; font-size:.67rem; font-weight:800; max-width:92px; opacity:.58; overflow-wrap:anywhere; position:relative; text-align:center; }
+    .r3-lineup-player img { border:2px solid rgba(220,190,255,.55); border-radius:50%; height:58px; object-fit:contain; width:58px; }
+    .r3-lineup-winner { color:#fff; opacity:1; text-shadow:0 0 12px #dba4ff; }
+    .r3-hanging-light { animation:r3-lamp-drop 1.25s cubic-bezier(.2,.8,.2,1) forwards; height:82px; left:50%; opacity:0; position:absolute; top:-90px; transform:translateX(-50%); width:80px; }
+    .r3-hanging-light::before { background:linear-gradient(#dfffff,#94e8ff); box-shadow:0 0 9px #baf5ff; content:''; height:63px; left:39px; position:absolute; top:0; width:2px; }
+    .r3-hanging-light::after { background:radial-gradient(circle,#fff 0 16%,#9deeff 27%,#9e5aff 56%,transparent 70%); border-radius:50%; box-shadow:0 0 24px 10px rgba(160,224,255,.72); color:#fff; content:'✦'; font-size:21px; height:36px; left:22px; line-height:36px; position:absolute; text-align:center; top:56px; width:36px; }
+    .r3-podium { align-items:end; animation:r3-podium-rise .9s 1.15s cubic-bezier(.2,.8,.2,1) both; display:flex; gap:clamp(.55rem, 3vw, 1.4rem); justify-content:center; margin:1.7rem 0 2rem; min-height:300px; }
     .r3-place { background:linear-gradient(145deg, rgba(109, 75, 164, .7), rgba(29, 55, 107, .65)); border:1px solid rgba(202, 229, 255, .48); border-radius:18px 18px 5px 5px; box-shadow:inset 0 1px 18px rgba(246, 235, 255, .14), 0 12px 24px rgba(0,0,0,.24); display:flex; flex-direction:column; justify-content:flex-end; padding:.75rem .55rem; text-align:center; width:min(29vw, 190px); }
     .r3-place-one { background:linear-gradient(145deg, rgba(157, 91, 224, .88), rgba(39, 91, 180, .83)); box-shadow:0 0 34px rgba(213, 170, 255, .8), inset 0 1px 25px rgba(255,255,255,.25); min-height:235px; position:relative; }
     .r3-place-two { min-height:180px; } .r3-place-three { min-height:145px; }
@@ -91,13 +112,15 @@ def _story_style():
     .r3-place-one img { filter:drop-shadow(0 0 10px #fff3a2); height:104px; width:104px; }
     .r3-confetti { height:0; position:relative; z-index:3; } .r3-confetti i { animation:r3-confetti 2.8s linear infinite; background:var(--c); display:block; height:10px; left:var(--x); position:absolute; top:-10px; transform:rotate(20deg); width:6px; }
     @keyframes r3-confetti { 0% { opacity:0; transform:translateY(-20px) rotate(0deg) } 12% { opacity:1 } 100% { opacity:0; transform:translateY(260px) rotate(520deg) } }
-    @media (max-width: 620px) { .r3-case-grid, .r3-solution-grid { grid-template-columns:1fr; } .r3-case-card img { height:175px; } }
+    @keyframes r3-lamp-drop { from { opacity:0; transform:translate(-50%,-58px); } to { opacity:1; transform:translate(-50%,0); } }
+    @keyframes r3-podium-rise { from { opacity:0; transform:translateY(90px); } to { opacity:1; transform:translateY(0); } }
+    @media (max-width: 620px) { .r3-case-grid, .r3-solution-grid { grid-template-columns:1fr; } .r3-case-card img { height:175px; } .r3-typed-line { animation:none; overflow:visible; white-space:normal; width:auto; } .r3-winner-lineup { flex-wrap:wrap; margin-top:2rem; } .r3-lineup-player { flex:0 0 20%; } .r3-hanging-light { display:none; } }
     @media (max-width: 520px) { .r3-podium { gap:.35rem; } .r3-place { width:31vw; padding:.55rem .25rem; } .r3-place img { height:58px; width:58px; } .r3-place-one img { height:76px; width:76px; } .r3-place-name { font-size:.78rem; } }
     @media (max-width: 620px) { .r3-scene { grid-template-columns: 1fr; gap: 0; padding: .2rem 1rem 0; }
       .r3-detective { width: 180px; margin-bottom: -1rem; } .r3-speech { min-height: 170px; } }
     @keyframes r3-bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-7px) } }
     @keyframes r3-talk { from { transform: scaleY(.55) } to { transform: scaleY(1.6) } }
-    @keyframes r3-type { to { opacity:1 } }
+    @keyframes r3-type-line { to { width:100%; } }
     @keyframes r3-blink { 50% { opacity: 0 } }
     </style>
     """, unsafe_allow_html=True)
@@ -162,12 +185,12 @@ def _story(tour, code, me, now):
 
 
 def _typed_story():
-    """Full story rendered once; CSS reveals the letters one at a time."""
-    characters = "".join(
-        f"<span class='r3-typed-char' style='--i:{number}'>{html.escape(character)}</span>"
-        for number, character in enumerate(r3.STORY)
+    """Reveal whole lines reliably; per-character animations dropped letters."""
+    lines = "".join(
+        f"<span class='r3-typed-line'>{html.escape(line)}</span>"
+        for line in r3.STORY.split("\n\n")
     )
-    return f"<span class='r3-typed-text'>{characters}</span>"
+    return f"<span class='r3-typed-text'>{lines}</span>"
 
 
 def _finalist_profiles(tour):
@@ -192,17 +215,17 @@ def _mystery(tour, code, me, now):
     st.progress(left / r3.ROUND_SECONDS)
 
     st.subheader("Case file")
-    st.markdown("<div class='r3-case-intro'>Study the people, the rooms, and the clues before you present your theory.</div>", unsafe_allow_html=True)
+    st.markdown("<div class='r3-case-intro'>Study the people, rooms, and clues. The three markers on your final theory form the Moonstone Vault code.</div>", unsafe_allow_html=True)
     suspects = "".join(
-        f"<div class='r3-case-card'><img src='{_image_data_url(CASE_IMAGES[name])}' alt='{name}'><span>{name}</span></div>"
+        f"<div class='r3-case-card'><img src='{_image_data_url(CASE_IMAGES[name])}' alt='{name}'><span>{name}<b class='r3-evidence-marker' title='Evidence marker'>{EVIDENCE_MARKERS[name]}</b></span></div>"
         for name in r3.SUSPECTS
     )
     rooms = "".join(
-        f"<div class='r3-case-card'><img src='{_image_data_url(CASE_IMAGES[name])}' alt='{name}'><span>{name}</span></div>"
+        f"<div class='r3-case-card'><img src='{_image_data_url(CASE_IMAGES[name])}' alt='{name}'><span>{name}<b class='r3-evidence-marker' title='Evidence marker'>{EVIDENCE_MARKERS[name]}</b></span></div>"
         for name in r3.ROOMS
     )
     objects = "".join(
-        f"<div class='r3-object-card'><span>{icon}</span><b>{name}</b></div>"
+        f"<div class='r3-object-card'><span>{icon}</span><b>{name}<span class='r3-evidence-marker' title='Evidence marker'>{EVIDENCE_MARKERS[name]}</span></b></div>"
         for name, icon in (("Key", "🗝️"), ("Map", "🗺️"), ("Flashlight", "🔦"))
     )
     st.markdown("<div class='r3-case-section'>Suspects</div><div class='r3-case-grid'>" + suspects + "</div>", unsafe_allow_html=True)
@@ -226,11 +249,13 @@ def _mystery(tour, code, me, now):
         st.warning("You have used your theories. Watch the other finalist or wait for the clock.")
         return
 
-    suspect = _theory_choice_cards(code, "suspect", "Who stole the Star Key?", r3.SUSPECTS)
+    suspect = _theory_choice_cards(code, "suspect", "Who stole the Moonstone Key?", r3.SUSPECTS)
     room = _theory_choice_cards(code, "room", "Where did they hide it?", r3.ROOMS)
     object_name = _theory_choice_cards(code, "object", "What object did they carry?", r3.OBJECTS)
+    st.markdown("<div class='r3-vault-lock'><div class='r3-vault-lock-title'>✦ Moonstone Vault Lock</div><div class='r3-vault-lock-help'>Enter the three evidence markers from your chosen thief, place, and object.</div></div>", unsafe_allow_html=True)
+    vault_code = st.text_input("Three-digit vault code", max_chars=3, placeholder="e.g. 318", key=f"r3_{code}_vault_code")
     if st.button("Submit theory", type="primary"):
-        after, message = storage.update(code, r3.answer, me, suspect, room, object_name, time.time())
+        after, message = storage.update(code, r3.answer, me, suspect, room, object_name, time.time(), vault_code)
         if after is not None and after["status"] == "round3_results":
             st.rerun(scope="app")
         st.error(message) if message.startswith("Not quite") else st.toast(message)
@@ -263,16 +288,15 @@ def _theory_choice_cards(code, group, question, options):
 def _results(tour, me):
     state = tour["round3"]
     winner = rules.find_player(tour, state["winner"])
-    st.title("The Star Key is found")
+    st.title("The Moonstone Vault Opens")
+    _winner_lineup(tour, winner)
     _podium(tour, winner)
-    if me == state["winner"]:
-        st.success("🏆 You are the Mastermind champion!")
-    else:
-        st.success(f"🏆 {common.player_label(winner)} is the Mastermind champion!")
+    champion = "You are the Mastermind champion!" if me == state["winner"] else f"{html.escape(common.player_label(winner))} is the Mastermind champion!"
+    st.markdown(f"<div class='r3-vault-lock'><div class='r3-vault-lock-title'>✦ {champion}</div></div>", unsafe_allow_html=True)
 
     st.subheader("Solution")
     st.markdown(_solution_cards(), unsafe_allow_html=True)
-    st.info("Portrait number for Nova: **3** · Conservatory room: **1** · Map clue: **8**  \n### Final vault code: `318`")
+    st.info("Nova marker: **3** · Conservatory marker: **1** · Map marker: **8**  \n### Moonstone Vault code: `318`")
     st.caption(f"Winner decided by: {state['decided_by']}.")
 
 
@@ -287,6 +311,18 @@ def _solution_cards():
                   f"<div class='r3-solution-icon' aria-label='{value}'>{icon}</div>")
         cards.append(f"<div class='r3-solution-card'>{visual}<div class='r3-solution-kind'>{kind}</div><div class='r3-solution-value'>{value}</div></div>")
     return "<div class='r3-solution-grid'>" + "".join(cards) + "</div>"
+
+
+def _winner_lineup(tour, winner):
+    """Show every guest, then let a themed hanging light identify the champion."""
+    players = []
+    for player in tour["players"]:
+        _, path = common.AVATARS.get(player.get("appearance"), common.AVATARS["girl"])
+        is_winner = player["id"] == winner["id"]
+        lamp = "<span class='r3-hanging-light' aria-hidden='true'></span>" if is_winner else ""
+        css = " r3-lineup-winner" if is_winner else ""
+        players.append(f"<div class='r3-lineup-player{css}'>{lamp}<img src='{common.avatar_data_url(path)}' alt=''><div>{html.escape(player['name'])}</div></div>")
+    st.markdown("<div class='r3-winner-lineup-title'>THE MANSION GUESTS</div><div class='r3-winner-lineup'>" + "".join(players) + "</div>", unsafe_allow_html=True)
 
 
 def _podium(tour, winner):

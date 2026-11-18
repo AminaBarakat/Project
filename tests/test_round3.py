@@ -55,7 +55,15 @@ def test_finalist_can_solve_the_mystery_and_wins_immediately():
     assert solved["status"] == "round3_results"
     assert solved["round3"]["winner"] == "p1"
     assert solved["round3"]["decided_by"] == "solved the mystery"
-    assert "318" in message
+    assert "Moonstone Vault" in message
+
+
+def test_correct_theory_needs_the_vault_code_when_one_is_supplied():
+    tour = final_started()
+    after, message = r3.answer(tour, "p1", "Nova", "Conservatory", "Map", PLAY, "999")
+    assert after["status"] == "round3"
+    assert len(after["round3"]["guesses"]["p1"]) == 1
+    assert "vault code" in message
 
 
 def test_wrong_theory_does_not_reveal_which_part_was_wrong():
