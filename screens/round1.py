@@ -47,12 +47,15 @@ def show(code, me):
     elif phase == "playing":
         _game_header(tour, me, now)
         _live_strip(code, me, _deadlines(tour, me, now))
-        _game(code, me)
+        _game(code, me, tour, now)
     elif phase == "results":
         _results(code, tour, me)
+    elif phase == "tiebreak":
+        _watch(code, me, "tiebreak", [now + r1.tiebreak_seconds_left(tour, me, now)])
+        _tiebreak(tour, code, me, now)
     else:
-        _waiting_or_tiebreak(code, me)
-        if rules.is_host(tour, me) and phase == "waiting":
+        _waiting_room(code, me)
+        if rules.is_host(tour, me):
             _host_controls(code, me)
 
 
@@ -140,16 +143,31 @@ def _game_header(tour, me, now):
                         f"Game {number + 1} of {len(r1.GAMES)} &nbsp; {dots}"))
 
 
+# Rule for this file: anything a player taps or types into is drawn as part of the
+# whole page. The small self-refreshing parts (@st.fragment(run_every=...)) only
+# show things that tick by themselves and have nothing to tap, so a game, a question
+# or a button can never go missing.
+
 @st.fragment(run_every="1s")
-def _waiting_or_tiebreak(code, me):
+def _waiting_room(code, me):
+    """The waiting room, refreshed every second (nothing to tap in it)."""
     now = time.time()
     tour = _load_settled(code, now)
-    if tour is None or r1.phase(tour, me, now) not in ("waiting", "tiebreak"):
-        st.rerun()                            # results are in, or something changed
-    if r1.phase(tour, me, now) == "tiebreak":
-        _tiebreak(tour, code, me, now)
-    else:
-        _waiting(tour, code, me, now)
+    if tour is None or r1.phase(tour, me, now) != "waiting":
+        st.rerun()                            # results are in, a tie-breaker opened, …
+    _waiting(tour, code, me, now)
+
+
+@st.fragment(run_every="1s")
+def _watch(code, me, phase, moments):
+    """Invisible: redraws the whole page when one of the moments has passed or this
+    player's phase has changed (e.g. the tie-breaker was decided)."""
+    now = time.time()
+    if now >= min(moments):
+        st.rerun()
+    tour = _load_settled(code, now)
+    if tour is None or r1.phase(tour, me, now) != phase:
+        st.rerun()
 
 
 def _html(markup):
@@ -201,13 +219,10 @@ def _intro(tour, me):
 
 # --- the games --------------------------------------------------------------------
 
-@st.fragment
-def _game(code, me):
-    """The current game. Drawn once, and redrawn only when this player taps something."""
-    now = time.time()
-    tour = storage.load(code)
-    if tour is None or r1.phase(tour, me, now) != "playing":
-        st.rerun()
+def _game(code, me, tour, now):
+    """The current game, drawn as part of the whole page (not in a separate
+    fragment), so it is drawn every time the page is: a game can never be
+    missing while the timer above it shows. A tap redraws the whole page."""
     number = r1.game_number(tour, me)
     game = r1.current_game(tour, me)
     # The team theme paints every button purple; make switched-off ones look switched off.
@@ -278,7 +293,7 @@ def _pattern(code, me, number, puzzle):
             if _picture_button(f"pattern_{number}_{option}", art.tile(shape, colour),
                                f"✓ {option}" if chosen else option, selected=chosen, bob=not picked):
                 st.session_state[picked_key] = None if chosen else option
-                st.rerun(scope="fragment")
+                st.rerun()
     if st.button("Lock in", type="primary", width="stretch", disabled=picked is None,
                  key=f"pattern_lock_{number}"):
         _submit(code, me, number, picked)
@@ -305,7 +320,7 @@ def _escape_route(code, me, number, puzzle):
                 new_route = route + [room]
                 if room in puzzle["map"]:          # not a dead end yet: keep walking
                     st.session_state[route_key] = new_route
-                    st.rerun(scope="fragment")
+                    st.rerun()
                 else:
                     st.session_state[route_key] = []
                     _submit(code, me, number, new_route)
@@ -335,7 +350,7 @@ def _memory(tour, code, me, number, now, puzzle):
                     picked.remove(name)
                 elif len(picked) < need:
                     picked.append(name)
-                st.rerun(scope="fragment")
+                st.rerun()
     if st.button("Lock in", type="primary", width="stretch", disabled=len(picked) != need,
                  key=f"memory_lock_{number}"):
         _submit(code, me, number, list(picked))
@@ -349,8 +364,7 @@ def _tiebreak(tour, code, me, now):
     st.markdown(f"Neither you nor {common.player_label(opponent)} got a game right. "
                 "One question decides it. If you're both right, the faster one wins.")
     seconds = r1.tiebreak_seconds_left(tour, me, now)
-    _html(art.heading("timer", f"{seconds}s"))
-    st.progress(seconds / r1.TIEBREAK_SECONDS)
+    _html(art.countdown(f"tb_{r1.duel_index(tour, me)}", seconds, r1.TIEBREAK_SECONDS, "One question decides it"))
     _html(art.panel("rules", "The question", [r1.TIEBREAK_QUESTION]))
     with st.form(_key(code, "tiebreak_form")):
         value = st.text_input("Your answer", max_chars=4)
@@ -394,10 +408,9 @@ def _race_track(tour, code, me, now):
     _html(art.race_track(runners, uid=f"{int(now * 10)}"))
 
 
-@st.fragment
 def _host_controls(code, me):
-    """Only the host sees this, once their own games are done. Drawn once and only
-    redrawn when the host taps something, so the buttons don't get lost."""
+    """Only the host sees this, once their own games are done. Part of the page;
+    a tap redraws the page."""
     now = time.time()
     tour = storage.load(code)
     if tour is None or tour["status"] != "round1":
@@ -422,7 +435,7 @@ def _host_controls(code, me):
                 st.rerun()
         elif right.button("Left the game", key=f"left_{player['id']}", width="stretch"):
             st.session_state[confirm_key] = ("left", player["id"])
-            st.rerun(scope="fragment")
+            st.rerun()
 
     if confirm == ("end",):
         st.warning("End Round 1 now? Every unfinished game counts as not answered.")
@@ -433,10 +446,10 @@ def _host_controls(code, me):
             st.rerun()
         if no.button("Cancel", key="end_no", width="stretch"):
             st.session_state[confirm_key] = None
-            st.rerun(scope="fragment")
+            st.rerun()
     elif st.button("End the round now", key="end_round", width="stretch"):
         st.session_state[confirm_key] = ("end",)
-        st.rerun(scope="fragment")
+        st.rerun()
 
 
 # --- results ---------------------------------------------------------------------
@@ -484,7 +497,6 @@ def _ready_watch(code, seen):
         st.rerun()
 
 
-@st.fragment
 def _ready_lineup(code, me):
     """The four detectives going through, side by side. Your own card is a button:
     tap it and you're ready. Everyone else's card shows READY / NOT READY."""
@@ -515,7 +527,6 @@ def _ready_lineup(code, me):
         st.caption("The four detectives going through are getting ready for Round 2…")
 
 
-@st.fragment
 def _ready_host(code, me):
     """The host's override: start Round 2 without waiting for everyone."""
     tour = storage.load(code)
@@ -532,10 +543,10 @@ def _ready_host(code, me):
                 st.rerun()
             if no.button("Cancel", key="r2_no", width="stretch"):
                 st.session_state[confirm_key] = False
-                st.rerun(scope="fragment")
+                st.rerun()
         elif st.button("Host: start Round 2 now", key="r2_force", width="stretch"):
             st.session_state[confirm_key] = True
-            st.rerun(scope="fragment")
+            st.rerun()
 
 
 def _scoreboard(tour, me):
