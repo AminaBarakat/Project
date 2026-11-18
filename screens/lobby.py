@@ -1,17 +1,33 @@
 """The lobby: everyone waits here until the host starts the tournament.
 
-The lobby deliberately renders as one normal Streamlit run.  Scheduled
-``st.fragment`` refreshes can outlive the lobby after a page change, which makes
-Community Cloud repeatedly report that it cannot find the old fragment id.
-Players still see the latest list whenever they interact with the lobby or
-refresh their browser, without leaving a broken refresh task behind.
+The lobby itself is drawn as one normal Streamlit run (buttons included), so taps
+can't get lost. A tiny invisible watcher (_watch) checks every 2 seconds, using
+the shared copy in screens/live.py, and redraws the page only when something
+changed: the game started, someone joined or left, or this player was removed.
+Without it, players had to refresh their browser to see the game start.
 """
 
 import streamlit as st
 
 import storage
 import tournament as rules
-from screens import common
+from screens import common, live
+
+WATCH_EVERY = "2s"
+
+
+def _seats(tour):
+    """Who is in the lobby, in order (what the page shows)."""
+    return tuple(player["id"] for player in tour["players"])
+
+
+@st.fragment(run_every=WATCH_EVERY)
+def _watch(code, me, seats):
+    """Invisible: redraw the page when the game starts or the player list changes."""
+    tour = live.peek(code)
+    if (tour is None or tour["status"] != "lobby" or not rules.find_player(tour, me)
+            or _seats(tour) != seats):
+        st.rerun(scope="app")
 
 def show(code, me):
     common.show_wordmark()
@@ -29,11 +45,14 @@ def show(code, me):
 
 def live_players(code, me):
     common.show_flash()
+    live.forget()                      # the watcher starts from data at least this new
     tour = storage.load(code)
     # Something changed that needs a different screen: the game started,
     # the tournament vanished, or this player was removed.
     if tour is None or tour["status"] != "lobby" or not rules.find_player(tour, me):
         st.rerun(scope="app")
+
+    _watch(code, me, _seats(tour))
 
     host = rules.is_host(tour, me)
     count = len(tour["players"])
