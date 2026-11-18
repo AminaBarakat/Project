@@ -268,6 +268,10 @@ def _mystery(tour, code, me, now):
     st.markdown("<div class='r3-vault-lock'><div class='r3-vault-lock-title'>✦ Moonstone Vault Lock</div><div class='r3-vault-lock-help'>Enter the three evidence markers from your chosen thief, place, and object.</div></div>", unsafe_allow_html=True)
     lock_key = art.css_key(f"r3_vault_{code}")
     st.markdown(art.lock_style(lock_key, digits=3), unsafe_allow_html=True)
+    st.markdown(f"""<style>
+    .st-key-{lock_key} div.stFormSubmitButton {{ display: flex; justify-content: center; }}
+    .st-key-{lock_key} div.stFormSubmitButton > button {{ width: auto !important; }}
+    </style>""", unsafe_allow_html=True)
     st.markdown('<div style="text-align:center;margin-top:.3rem">' + art.img(art.shackle(), width="130px").replace("margin:auto", "margin:0 auto -4px") + "</div>", unsafe_allow_html=True)
     with st.container(key=lock_key):
         with st.form(f"r3_{code}_vault_form", border=False):
