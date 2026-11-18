@@ -8,8 +8,9 @@ from screens import common
 
 
 def show():
-    st.title(f"🗝️ {common.TITLE}")
-    st.write("Eight guests. One mansion. Only one will solve the last clue.")
+    common.show_wordmark()
+    st.markdown("<div class='mm-tagline'>EIGHT GUESTS · ONE MANSION · ONE LAST CLUE</div>", unsafe_allow_html=True)
+    st.divider()
 
     create_tab, join_tab = st.tabs(["Create a tournament", "Join with a code"])
     with create_tab:
@@ -19,12 +20,12 @@ def show():
 
 
 def show_create():
-    with st.form("create"):
-        name = st.text_input("Your name", max_chars=rules.MAX_NAME_LENGTH)
-        st.caption(f"You'll be the host and one of the {rules.MAX_PLAYERS} players.")
-        submitted = st.form_submit_button("Create tournament", type="primary")
+    appearance = common.avatar_picker("create_avatar")
+    name = st.text_input("Your name", key="create_name", max_chars=rules.MAX_NAME_LENGTH)
+    st.caption(f"You'll be the host and one of the {rules.MAX_PLAYERS} players.")
+    submitted = st.button("Create tournament", type="primary", key="create_tournament")
     if submitted:
-        tour, host_id, message = storage.create(name)
+        tour, host_id, message = storage.create(name, appearance=appearance)
         if tour is None:
             st.error(message)
         else:
@@ -35,14 +36,16 @@ def show_create():
 def show_join(prefilled_code=""):
     if prefilled_code:
         st.subheader(f"Join tournament {prefilled_code}")
-    with st.form("join"):
-        code = st.text_input("Code", value=prefilled_code, max_chars=storage.CODE_LENGTH,
-                             placeholder="e.g. KQZT")
-        name = st.text_input("Your name", max_chars=rules.MAX_NAME_LENGTH)
-        submitted = st.form_submit_button("Join", type="primary")
+    code = st.text_input("Code", value=prefilled_code, key="join_code", max_chars=storage.CODE_LENGTH,
+                         placeholder="e.g. KQZT")
+    existing = storage.load(code) if len(code.strip()) == storage.CODE_LENGTH else None
+    occupied = [player.get("appearance") for player in existing.get("players", [])] if existing else []
+    appearance = common.avatar_picker("join_avatar", occupied)
+    name = st.text_input("Your name", key="join_name", max_chars=rules.MAX_NAME_LENGTH)
+    submitted = st.button("Join tournament", type="primary", key="join_tournament")
     if submitted:
         player_id = storage.new_player_id()
-        tour, message = storage.update(code, rules.join, player_id, name)
+        tour, message = storage.update(code, rules.join, player_id, name, appearance)
         if tour is not None and rules.find_player(tour, player_id):
             common.flash("success", message)
             common.go_to(tour["code"], player_id)

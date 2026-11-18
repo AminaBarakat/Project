@@ -69,6 +69,14 @@ def test_join_refuses_duplicate_name_ignoring_capitals_and_spaces():
     assert tour == before
 
 
+def test_join_refuses_an_already_claimed_detective_portrait():
+    tour, _ = t.new_tournament("ABCD", "p0", "Ana", appearance="girl_emerald")
+    before = copy.deepcopy(tour)
+    assert_refused(before, t.join(tour, "p1", "Bruno", appearance="girl_emerald"))
+    joined, _ = t.join(tour, "p1", "Bruno", appearance="boy_royal")
+    assert joined["players"][1]["appearance"] == "boy_royal"
+
+
 def test_join_refuses_empty_and_too_long_names():
     tour = lobby_with(2)
     before = copy.deepcopy(tour)
@@ -172,6 +180,23 @@ def test_draw_is_random_but_repeatable_with_a_seed():
 def test_cannot_start_twice():
     tour, _ = t.start(lobby_with(8), "p0", random.Random(1))
     assert_refused(copy.deepcopy(tour), t.start(tour, "p0"))
+
+
+def test_only_host_can_choose_two_active_finalists_for_round3():
+    tour = lobby_with(4)
+    tour["status"] = "round2"
+    tour["eliminated"] = ["p2", "p3"]
+    before = copy.deepcopy(tour)
+    assert_refused(before, t.start_round3(tour, "p1", ["p0", "p1"], now=100))
+    assert_refused(before, t.start_round3(tour, "p0", ["p0", "p2"], now=100))
+    assert_refused(before, t.start_round3(tour, "p0", ["p0"], now=100))
+
+    final, _ = t.start_round3(tour, "p0", ["p0", "p1"], now=100)
+    assert final["status"] == "round3"
+    assert final["round3"]["finalists"] == ["p0", "p1"]
+    assert final["round3"]["story_started_at"] == 100
+    assert final["round3"]["starts_at"] is None
+    assert final["round3"]["ends_at"] is None
 
 
 def test_opponent_of_is_symmetric():

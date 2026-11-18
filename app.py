@@ -10,23 +10,39 @@ the shared saving in storage.py, and the screens in screens/.
 """
 
 import streamlit as st
+from streamlit.errors import StreamlitSecretNotFoundError
 
 import storage
 import tournament as rules
 from screens import common, home, lobby
 from screens import round1 as round1_screen
 from screens import round2 as round2_screen
+from screens import round3 as round3_screen
 
 st.set_page_config(page_title=common.TITLE, page_icon="🗝️", layout="centered")
+common.apply_theme()
 
 # On a laptop, storage.py uses the local SQLite file.  On Streamlit Community
 # Cloud, these two values are added in the app's Secrets settings so every
 # visitor uses the same online Supabase database.  Secrets are deliberately
 # not stored in this GitHub repository.
-if "supabase" in st.secrets:
+def _supabase_secrets():
+    """The [supabase] secrets, or None when this computer has no secrets file
+    (then we simply use the local SQLite file instead of crashing)."""
+    try:
+        return st.secrets["supabase"] if "supabase" in st.secrets else None
+    except StreamlitSecretNotFoundError:
+        return None
+
+
+supabase = _supabase_secrets()
+if supabase:
+    if "key" not in supabase:
+        st.error("Add key to the [supabase] secrets.")
+        st.stop()
     storage.configure_supabase(
-        st.secrets["supabase"]["url"],
-        st.secrets["supabase"]["key"],
+        supabase["url"],
+        supabase["key"],
     )
 
 code = st.query_params.get("code")
@@ -62,5 +78,9 @@ if tour["status"] == "lobby":
     lobby.show(tour["code"], me)
 elif tour["status"] in ("round1", "round1_results"):
     round1_screen.show(tour["code"], me)
+elif tour["status"] in ("round2", "final"):
+    round2_screen.show(tour["code"], me)
+elif tour["status"] in ("round3", "round3_results", "finished"):
+    round3_screen.show(tour["code"], me)
 else:
-    round2_screen.show(tour, me)
+    st.error("This tournament is in an unknown game phase.")
