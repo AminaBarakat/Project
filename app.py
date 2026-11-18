@@ -11,6 +11,8 @@ the shared saving in storage.py, and the screens in screens/.
 
 import time
 
+import time
+
 import streamlit as st
 from streamlit.errors import StreamlitSecretNotFoundError
 
@@ -68,6 +70,15 @@ if tour is None:
 
 if not rules.find_player(tour, me):
     # Someone who opened a join link, or a player who left or was removed.
+    # Supabase can take a moment to return the player record just written by
+    # Create/Join. Do not flash the join form during that tiny gap.
+    retry_key = f"mm-seat-retries-{code}-{me}"
+    retries = st.session_state.get(retry_key, 0)
+    if me and tour["status"] == "lobby" and retries < 4:
+        st.session_state[retry_key] = retries + 1
+        st.info("Opening your waiting room…")
+        time.sleep(0.35)
+        st.rerun()
     if me:
         st.warning("You're not in this tournament any more.")
     if tour["status"] == "lobby":

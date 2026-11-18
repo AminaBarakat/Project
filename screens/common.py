@@ -155,7 +155,9 @@ def avatar_picker(key, unavailable=()):
     .mm-avatar-choice--selected { border-color:#9be4ff; box-shadow:0 0 16px rgba(155,228,255,.55); }
     .mm-avatar-choice--selected::after { content:'✓'; position:absolute; top:5px; right:9px; color:#9be4ff;
       font:bold 1.35rem Arial,sans-serif; text-shadow:0 0 6px #000; }
-    .mm-avatar-choice--taken { filter:grayscale(1) brightness(.55); cursor:not-allowed; }
+    .mm-avatar-choice--taken { cursor:not-allowed; }
+    .mm-avatar-choice--taken::before { content:''; position:absolute; inset:0; z-index:1;
+      background:rgba(54, 22, 94, .66); box-shadow:inset 0 0 32px rgba(8, 3, 20, .65); }
     .mm-avatar-choice img { width:100%; height:100%; object-fit:contain; display:block; }
     @media (max-width:560px) { .mm-avatar-grid { gap:.42rem; } }
     </style>
