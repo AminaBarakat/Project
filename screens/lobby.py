@@ -1,16 +1,17 @@
 """The lobby: everyone waits here until the host starts the tournament.
 
-The player list refreshes itself every 2 seconds (st.fragment with run_every), so
-when someone joins on their phone, everyone else sees them appear shortly after."""
+The lobby deliberately renders as one normal Streamlit run.  Scheduled
+``st.fragment`` refreshes can outlive the lobby after a page change, which makes
+Community Cloud repeatedly report that it cannot find the old fragment id.
+Players still see the latest list whenever they interact with the lobby or
+refresh their browser, without leaving a broken refresh task behind.
+"""
 
 import streamlit as st
 
 import storage
 import tournament as rules
 from screens import common
-
-REFRESH = "2s"
-
 
 def show(code, me):
     common.show_wordmark()
@@ -26,7 +27,6 @@ def show(code, me):
     live_players(code, me)
 
 
-@st.fragment(run_every=REFRESH)
 def live_players(code, me):
     common.show_flash()
     tour = storage.load(code)
@@ -70,7 +70,7 @@ def live_players(code, me):
                         if remove:
                             _, message = storage.update(code, rules.remove_player, me, player["id"])
                             common.flash("info", message)
-                            st.rerun(scope="fragment")
+                            st.rerun()
 
     for _ in range(rules.MAX_PLAYERS - count):
         st.markdown("<span style='opacity:0.4'>… waiting for a player</span>", unsafe_allow_html=True)

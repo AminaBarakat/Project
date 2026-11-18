@@ -22,7 +22,7 @@ import streamlit as st
 import round1 as r1
 import storage
 import tournament as rules
-from screens import art, avatars, common, duels
+from screens import art, avatars, common, duels, live
 
 WAITING_LINES = [
     "Dusting the bookshelves for fingerprints…",
@@ -34,6 +34,7 @@ WAITING_LINES = [
 
 
 def show(code, me):
+    live.forget()                             # the refreshing parts start from data at least this new
     now = time.time()
     tour = _load_settled(code, now)
     if tour is None or tour["status"] not in ("round1", "round1_results"):
@@ -59,9 +60,11 @@ def show(code, me):
             _host_controls(code, me)
 
 
-def _load_settled(code, now):
-    """Read the tournament; write only if something is due (a timer ran out, a duel can be decided)."""
-    tour = storage.load(code)
+def _load_settled(code, now, quick=False):
+    """Read the tournament; write only if something is due (a timer ran out, a duel can be decided).
+    quick=True (for parts that refresh every second): read the shared copy from
+    screens/live.py instead of the database; the database is still used to write."""
+    tour = live.peek(code) if quick else storage.load(code)
     if tour is not None and r1.settle(tour, now)[0] != tour:
         tour, _ = storage.update(code, r1.settle, now)
     return tour
@@ -93,7 +96,7 @@ def _live_strip(code, me, moments):
     below can't get lost."""
     if time.time() >= min(moments):
         st.rerun()
-    tour = storage.load(code)
+    tour = live.peek(code)
     opponent = rules.opponent_of(tour, me) if tour else None
     if opponent is None:
         return
@@ -152,7 +155,7 @@ def _game_header(tour, me, now):
 def _waiting_room(code, me):
     """The waiting room, refreshed every second (nothing to tap in it)."""
     now = time.time()
-    tour = _load_settled(code, now)
+    tour = _load_settled(code, now, quick=True)
     if tour is None or r1.phase(tour, me, now) != "waiting":
         st.rerun()                            # results are in, a tie-breaker opened, …
     _waiting(tour, code, me, now)
@@ -165,7 +168,7 @@ def _watch(code, me, phase, moments):
     now = time.time()
     if now >= min(moments):
         st.rerun()
-    tour = _load_settled(code, now)
+    tour = _load_settled(code, now, quick=True)
     if tour is None or r1.phase(tour, me, now) != phase:
         st.rerun()
 
@@ -492,7 +495,7 @@ def _results(code, tour, me):
 def _ready_watch(code, seen):
     """Invisible: checks every second and redraws the page when someone new is
     ready or Round 2 has begun. Draws nothing, so taps can't get lost in it."""
-    tour = storage.load(code)
+    tour = live.peek(code)
     if tour is None or tour["status"] != "round1_results" or tuple(sorted(r1.ready_players(tour))) != seen:
         st.rerun()
 
