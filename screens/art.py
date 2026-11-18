@@ -642,29 +642,31 @@ def shackle():
 
 
 def lock_style(key):
-    """CSS that turns the container with this key into the padlock's body, and the
-    text box inside it into four dial windows: the digits you type appear right in
-    the windows. Overrides the team theme's pale input boxes inside the lock only."""
+    """CSS that turns the container with this key into the padlock's body, with one
+    dark display window for the code (like a digital lock). The digits are typed
+    straight into that window. Streamlit's own hints ("Press Enter to submit form"
+    and the 0/4 counter) are hidden so they can't show through the digits."""
     k = css_key(key)
     c = f".st-key-{k}"
-    # Courier New digits are exactly 0.6em wide; each window is 1.2em wide and the
-    # pitch (window + gap) is 1.5em, matched by letter-spacing 0.9em.
-    windows = (f"repeating-linear-gradient(90deg, {IVORY} 0 1.2em, transparent 1.2em 1.5em)")
     return f"""<style>
 {c} {{ background: linear-gradient(160deg, {SILVER}, #aeb3c2) !important; border: 4px solid {PURPLE} !important;
-      border-radius: 22px !important; padding: 1.1rem .8rem .9rem !important; max-width: 300px; margin: -6px auto 0 !important;
+      border-radius: 22px !important; padding: 1.1rem 1rem .9rem !important; max-width: 300px; margin: -6px auto 0 !important;
       box-shadow: 0 0 22px {PURPLE}55; }}
-{c} [data-baseweb="input"], {c} [data-baseweb="input"] > div, {c} [data-baseweb="base-input"] {{
+{c} [data-testid="InputInstructions"] {{ display: none !important; }}
+{c} [data-baseweb="input"] {{
+      background: {BG} !important; border: 3px solid #6b7080 !important; border-radius: 12px !important;
+      box-shadow: inset 0 3px 8px #000a !important; }}
+{c} [data-baseweb="input"] > div, {c} [data-baseweb="base-input"] {{
       background: transparent !important; border: none !important; box-shadow: none !important; }}
 {c} input {{
       font-family: "Courier New", Courier, monospace !important; font-size: 2.2rem !important; font-weight: 700 !important;
-      letter-spacing: .9em !important; color: {BG} !important; -webkit-text-fill-color: {BG} !important;
-      caret-color: {PURPLE} !important; text-align: left !important;
-      width: 5.85em !important; padding: .15em 0 .15em .3em !important; margin: 0 auto !important; display: block;
-      background: {windows} !important; border-radius: 6px; }}
-{c} input::placeholder {{ color: #9aa0b0 !important; -webkit-text-fill-color: #9aa0b0 !important; opacity: 1 !important; }}
+      letter-spacing: .45em !important; text-indent: .45em; text-align: center !important;
+      color: {TILE_COLOURS['ice']} !important; -webkit-text-fill-color: {TILE_COLOURS['ice']} !important;
+      caret-color: {PURPLE} !important; background: transparent !important; padding: .2em 0 !important; }}
+{c} input::placeholder {{ color: #5d5480 !important; -webkit-text-fill-color: #5d5480 !important; opacity: 1 !important; }}
 {c} div.stFormSubmitButton > button {{ width: 100%; margin-top: .6rem; }}
-{c} [data-testid="stWidgetLabel"], {c} label {{ color: {BG} !important; font-weight: 700; justify-content: center; }}
+{c} [data-testid="stWidgetLabel"] {{ justify-content: center; }}
+{c} [data-testid="stWidgetLabel"] p, {c} label {{ color: {BG} !important; font-weight: 700 !important; }}
 </style>"""
 
 
@@ -717,22 +719,78 @@ def room_entrance(name, text):
 
 # --- Ready check before Round 2 ----------------------------------------------------------
 
-def ready_chips(chips):
-    """One chip per detective going through: ready (ice-blue, ✓) or still getting ready
-    (silver, pulsing dots). chips: list of (name, is_ready, is_me). Names are escaped."""
-    import html as _html
-    parts = []
-    for name, is_ready, is_me in chips:
-        edge = TILE_COLOURS["ice"] if is_ready else SILVER + "88"
-        mark = icon("mark_right", 18) if is_ready else '<span class="mm-dots"><i>.</i><i>.</i><i>.</i></span>'
-        parts.append(f'<div style="display:flex;align-items:center;gap:.35rem;padding:.35rem .7rem;border-radius:999px;'
-                     f'border:2px solid {edge};background:rgba(29,20,56,.85);color:{IVORY};font-weight:{800 if is_me else 600};'
-                     f'{"box-shadow:0 0 12px " + TILE_COLOURS["ice"] + "88;" if is_ready else ""}">'
-                     f'{mark}<span>{_html.escape(name)}</span></div>')
+def ready_lineup_style():
+    """Styles for the ready check before Round 2, drawn like a game lobby: the four
+    detectives going through stand side by side, each with a status bar under the
+    portrait. You get ready by tapping your own card (see ready_tap_style)."""
+    ice = TILE_COLOURS["ice"]
     return f"""<style>
 @keyframes mm-dot {{ 0%,100% {{ opacity:.2 }} 50% {{ opacity:1 }} }}
 .mm-dots i {{ font-style:normal;font-weight:900;animation:mm-dot 1.2s infinite }}
 .mm-dots i:nth-child(2) {{ animation-delay:.2s }} .mm-dots i:nth-child(3) {{ animation-delay:.4s }}
-</style>
-<div style="font-size:.8rem;color:{SILVER};letter-spacing:.06em;margin:.2rem 0 .4rem">READY FOR ROUND 2</div>
-<div style="display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.8rem">{"".join(parts)}</div>"""
+.mm-rl-title {{ font-size:.8rem;color:{SILVER};letter-spacing:.08em;margin:.4rem 0 .5rem;text-align:center }}
+.mm-rl-card {{ position:relative;box-sizing:border-box;height:214px;border-radius:14px;overflow:hidden;background:rgba(29,20,56,.85);
+      border:2px solid {SILVER}44;display:flex;flex-direction:column }}
+.mm-rl-me {{ border-color:{PURPLE} }}
+.mm-rl-ready {{ border-color:{ice};box-shadow:0 0 18px {ice}66 }}
+.mm-rl-you {{ position:absolute;top:6px;left:50%;transform:translateX(-50%);z-index:2;background:{PURPLE};color:{BG};
+      font-size:.62rem;font-weight:900;letter-spacing:.1em;padding:1px 8px;border-radius:999px }}
+.mm-rl-stage {{ position:relative;flex:1 1 auto;min-height:0;
+      background:radial-gradient(ellipse 60% 16% at 50% 92%, {PURPLE}88, transparent 70%),
+                 radial-gradient(circle at 50% 30%, #4b2a86, #1d1438 75%) }}
+.mm-rl-stage img {{ position:absolute;bottom:3%;left:50%;transform:translateX(-50%);height:92%;max-width:100%;object-fit:contain }}
+.mm-rl-wait .mm-rl-stage img {{ filter:saturate(.55) brightness(.8) }}
+.mm-rl-name {{ text-align:center;color:{IVORY};font-weight:800;font-size:.85rem;padding:.35rem .3rem .3rem;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis }}
+.mm-rl-bar {{ display:flex;align-items:center;justify-content:center;gap:.25rem;padding:.4rem .2rem;
+      font-size:.72rem;font-weight:900;letter-spacing:.08em;white-space:nowrap }}
+.mm-rl-wait .mm-rl-bar {{ background:#2c2346;color:{SILVER}aa }}
+.mm-rl-ready .mm-rl-bar {{ background:{ice};color:{BG} }}
+@media (max-width:560px) {{
+  .mm-rl-card {{ height:150px }} .mm-rl-name {{ font-size:.7rem }}
+  .mm-rl-bar {{ font-size:.56rem;letter-spacing:.03em;padding:.3rem .1rem }} }}
+</style>"""
+
+
+def ready_card(name, picture, is_ready, is_me):
+    """One detective's card in the ready lineup (not tappable). picture is one of
+    our own avatar images as a data URL. The name is escaped."""
+    import html as _html
+    state = "mm-rl-ready" if is_ready else "mm-rl-wait"
+    you = '<div class="mm-rl-you">YOU</div>' if is_me else ""
+    if is_ready:
+        bar = f'{icon("mark_right", 16)}<span>READY</span>'
+    else:
+        bar = '<span>NOT READY</span><span class="mm-dots"><i>.</i><i>.</i><i>.</i></span>'
+    return (f'<div class="mm-rl-card {state}{" mm-rl-me" if is_me else ""}">{you}'
+            f'<div class="mm-rl-stage"><img src="{picture}" alt="" /></div>'
+            f'<div class="mm-rl-name">{_html.escape(name)}</div>'
+            f'<div class="mm-rl-bar">{bar}</div></div>')
+
+
+def ready_tap_style(key, picture):
+    """Turns the button with this key into YOUR card in the lineup: same size and
+    look as the others, glowing, with a 'TAP WHEN READY' bar. Tapping it = ready."""
+    k = css_key(key)
+    b = f".st-key-{k} div.stButton > button"
+    return f"""<style>
+@keyframes mm-tap-glow {{ 0%,100% {{ box-shadow:0 0 8px {PURPLE}66 }} 50% {{ box-shadow:0 0 24px {PURPLE} }} }}
+{b} {{ position:relative;box-sizing:border-box;height:214px;width:100%;padding:0 0 1.95rem !important;overflow:hidden;
+      border:2px solid {PURPLE} !important;border-radius:14px !important;display:flex;align-items:flex-end;justify-content:center;
+      background:url('{picture}') center 14px / auto 140px no-repeat,
+                 radial-gradient(ellipse 60% 12% at 50% 76%, {PURPLE}88, transparent 70%),
+                 radial-gradient(circle at 50% 30%, #4b2a86, #1d1438 75%) !important;
+      animation:mm-tap-glow 1.6s ease-in-out infinite;transition:transform .1s }}
+{b}:active {{ transform:scale(.96) }}
+{b} p {{ color:{IVORY} !important;font-weight:800 !important;font-size:.85rem !important;margin:0 0 .3rem !important;
+      max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 .3rem }}
+{b}::before {{ content:"YOU";position:absolute;top:6px;left:50%;transform:translateX(-50%);background:{PURPLE};color:{BG};
+      font-size:.62rem;font-weight:900;letter-spacing:.1em;padding:1px 8px;border-radius:999px }}
+{b}::after {{ content:"TAP WHEN READY";position:absolute;left:0;right:0;bottom:0;padding:.4rem .2rem;background:{PURPLE};
+      color:{BG};font-size:.72rem;font-weight:900;letter-spacing:.08em;white-space:nowrap }}
+@media (max-width:560px) {{
+  {b} {{ height:150px;padding-bottom:1.5rem !important;background-size:auto 92px, auto, auto !important;
+        background-position:center 16px, center, center !important }}
+  {b} p {{ font-size:.7rem !important }}
+  {b}::after {{ content:"TAP ME";font-size:.6rem;padding:.3rem .1rem }} }}
+</style>"""
