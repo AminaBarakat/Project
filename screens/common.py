@@ -7,6 +7,7 @@ import base64
 import html
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlencode
 
 import streamlit as st
 
@@ -126,54 +127,54 @@ def show_wordmark():
 
 
 def avatar_picker(key, unavailable=()):
-    """The detectives as small square cards, 4 per row (on phones too). The chosen
-    one glows with a tick; portraits already taken are greyed out and can't be picked.
-    Uses small copies of the pictures (screens/avatars.py) so the page loads fast."""
+    """A compact, picture-only detective picker.
+
+    The whole portrait is a link, instead of hiding a Streamlit button over an
+    image. That keeps the target reliably clickable across Streamlit versions.
+    """
     from screens import avatars          # imported here: avatars.py itself uses this file
 
     choice_key = f"{key}_choice"
+    query_key = f"{key}_avatar"
     unavailable = set(unavailable)
+    picked_from_link = st.query_params.get(query_key)
+    if picked_from_link in AVATARS and picked_from_link not in unavailable:
+        st.session_state[choice_key] = picked_from_link
     if choice_key not in st.session_state or st.session_state[choice_key] in unavailable:
         st.session_state[choice_key] = next((option for option in AVATARS if option not in unavailable), "girl")
     options = list(AVATARS)
     chosen = st.session_state[choice_key]
 
-    css = [f"""
-.st-key-{key}_grid {{ gap: .5rem !important; }}
-.st-key-{key}_grid [data-testid="stHorizontalBlock"] {{ flex-wrap: nowrap !important; gap: .5rem !important; }}
-.st-key-{key}_grid [data-testid="stColumn"] {{ min-width: 0 !important; width: auto !important; flex: 1 1 0 !important; }}
-.st-key-{key}_grid [data-testid="stImage"] {{ border-radius: 14px; overflow: hidden;
-  background: radial-gradient(circle at 50% 30%, #4b2a86, #1d1438 75%); }}
-.st-key-{key}_grid [data-testid="stImage"] img {{ aspect-ratio: 1 / 1; object-fit: contain; }}
-.st-key-{key}_grid div.stButton {{ margin-top: -100%; position: relative; z-index: 1; }}
-.st-key-{key}_grid div.stButton > button {{ position: relative; width: 100%; aspect-ratio: 1 / 1; min-height: 0 !important;
-  padding: 0 !important; border-radius: 14px !important; border: 2px solid transparent !important;
-  background: transparent !important; box-shadow: none !important; transition: transform .15s ease, box-shadow .15s ease; }}
-.st-key-{key}_grid div.stButton > button:hover {{ transform:translateY(-3px); border-color:#b57bff !important;
-  box-shadow:0 0 16px rgba(181,123,255,.5) !important; }}
-.st-key-{key}_grid div.stButton > button p {{ font-size:0 !important; }}
-.st-key-{key}_grid div.stButton > button:disabled {{ opacity: 1 !important; filter: grayscale(1) brightness(.55); cursor: not-allowed; }}
-.st-key-{key}_grid [data-testid="stHorizontalBlock"] + [data-testid="stHorizontalBlock"] {{ margin-top: .5rem; }}"""]
-    css.append(f""".st-key-{key}_{chosen} div.stButton > button {{ border: 2px solid #9be4ff !important;
-  box-shadow: 0 0 16px rgba(155,228,255,.55) !important; }}
-.st-key-{key}_{chosen} div.stButton > button::after {{ content: '✓'; position: absolute; top: 3px; right: 7px;
-  color: #9be4ff; font-weight: 900; font-size: 1rem; text-shadow: 0 0 6px #000; }}""")
-    st.markdown("<div class='mm-label'>Choose your detective</div><style>" + "".join(css) + "</style>",
-                unsafe_allow_html=True)
-
-    with st.container(key=f"{key}_grid"):
-        for start in range(0, len(options), 4):
-            columns = st.columns(4)
-            for column, option in zip(columns, options[start:start + 4]):
-                label, path = AVATARS[option]
-                with column:
-                    # Real image elements survive Streamlit reruns; CSS-only
-                    # backgrounds on keyed widgets did not reliably do so.
-                    st.image(avatars.thumbnail(path, 200), width="stretch")
-                    if st.button(label, key=f"{key}_{option}", width="stretch", disabled=option in unavailable,
-                                 help=label):
-                        st.session_state[choice_key] = option
-                        st.rerun()
+    css = """
+    <style>
+    .mm-avatar-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:.7rem; }
+    .mm-avatar-choice { display:block; position:relative; aspect-ratio:1 / 1; overflow:hidden; border-radius:14px;
+      background:radial-gradient(circle at 50% 30%, #4b2a86, #1d1438 75%); border:2px solid transparent;
+      transition:transform .15s ease, box-shadow .15s ease; }
+    .mm-avatar-choice:hover { transform:translateY(-3px); border-color:#b57bff; box-shadow:0 0 16px rgba(181,123,255,.5); }
+    .mm-avatar-choice--selected { border-color:#9be4ff; box-shadow:0 0 16px rgba(155,228,255,.55); }
+    .mm-avatar-choice--selected::after { content:'✓'; position:absolute; top:5px; right:9px; color:#9be4ff;
+      font:bold 1.35rem Arial,sans-serif; text-shadow:0 0 6px #000; }
+    .mm-avatar-choice--taken { filter:grayscale(1) brightness(.55); cursor:not-allowed; }
+    .mm-avatar-choice img { width:100%; height:100%; object-fit:contain; display:block; }
+    @media (max-width:560px) { .mm-avatar-grid { gap:.42rem; } }
+    </style>
+    """
+    params = {name: st.query_params.get(name) for name in ("code", "me") if st.query_params.get(name)}
+    cards = []
+    for option in options:
+        label, path = AVATARS[option]
+        picture = avatars.thumbnail(path, 200)
+        classes = "mm-avatar-choice" + (" mm-avatar-choice--selected" if option == chosen else "")
+        if option in unavailable:
+            cards.append(f'<span class="{classes} mm-avatar-choice--taken" aria-label="{html.escape(label)} taken">'
+                         f'<img src="{picture}" alt="" /></span>')
+            continue
+        href_params = {**params, query_key: option}
+        cards.append(f'<a class="{classes}" href="?{urlencode(href_params)}" aria-label="Choose {html.escape(label)}">'
+                     f'<img src="{picture}" alt="" /></a>')
+    st.markdown("<div class='mm-label'>Choose your detective</div>" + css +
+                "<div class='mm-avatar-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
     return st.session_state[choice_key]
 
 
