@@ -208,7 +208,7 @@ def _number_lock(code, me, number, puzzle):
         st.markdown(f"`{guess}`  {r1.clue_text(feedback)}")
 
     # The padlock: the loop on top is a drawing, the body is a styled container, and
-    # the text box inside it is styled as the four dial windows (screens/art.py).
+    # the text box inside it is styled as one dark display window (screens/art.py).
     lock_key = art.css_key(f"lock_{number}")
     _html(art.lock_style(lock_key))
     _html('<div style="text-align:center;margin-top:.6rem">'
@@ -407,8 +407,10 @@ def _results(code, tour, me):
         _html(art.banner("through", "You're through to Round 2!"))
 
     # Round 2 starts when the four detectives going through are all ready.
-    _ready_board(code, me)
-    _ready_buttons(code, me)
+    # You get ready by tapping your own card in the lineup.
+    _ready_watch(code, tuple(sorted(r1.ready_players(tour))))
+    _ready_lineup(code, me)
+    _ready_host(code, me)
 
     cards = []
     for number, result in enumerate(tour["round1"]["results"], start=1):
@@ -423,38 +425,51 @@ def _results(code, tour, me):
 
 
 @st.fragment(run_every="1s")
-def _ready_board(code, me):
-    """Who is ready for Round 2. Checks every second; when Round 2 begins, the whole
-    page moves on. No buttons in here, so taps can't get lost in the refresh."""
+def _ready_watch(code, seen):
+    """Invisible: checks every second and redraws the page when someone new is
+    ready or Round 2 has begun. Draws nothing, so taps can't get lost in it."""
     tour = storage.load(code)
-    if tour is None or tour["status"] != "round1_results":
+    if tour is None or tour["status"] != "round1_results" or tuple(sorted(r1.ready_players(tour))) != seen:
         st.rerun()
-    ready = set(r1.ready_players(tour))
-    chips = []
-    for pid in r1.advancing(tour):
-        player = rules.find_player(tour, pid)
-        name = "You" if pid == me else player["name"]
-        chips.append((name, pid in ready, pid == me))
-    _html(art.ready_chips(chips))
 
 
 @st.fragment
-def _ready_buttons(code, me):
-    """The "I'm ready" button (players going through) and the host's override.
-    Drawn once and redrawn only when tapped."""
+def _ready_lineup(code, me):
+    """The four detectives going through, side by side. Your own card is a button:
+    tap it and you're ready. Everyone else's card shows READY / NOT READY."""
     tour = storage.load(code)
     if tour is None or tour["status"] != "round1_results":
         return
     going = r1.advancing(tour)
-    if me in going and me not in r1.ready_players(tour):
-        if st.button("I'm ready for Round 2", key="ready_r2", type="primary", width="stretch"):
-            storage.update(code, r1.mark_ready, me, time.time())
-            st.rerun()
+    ready = set(r1.ready_players(tour))
+    _html(art.ready_lineup_style())
+    _html('<div class="mm-rl-title">READY FOR ROUND 2</div>')
+    for column, pid in zip(_grid("ready_lineup", len(going)), going):
+        player = rules.find_player(tour, pid)
+        _, path = common.AVATARS.get(player.get("appearance") or "girl", common.AVATARS["girl"])
+        picture = common.avatar_data_url(path)
+        with column:
+            if pid == me and pid not in ready:
+                _html(art.ready_tap_style("ready_tap", picture))
+                if st.button(common.safe(player["name"]), key="ready_tap", width="stretch"):
+                    storage.update(code, r1.mark_ready, me, time.time())
+                    st.rerun()
+            else:
+                _html(art.ready_card(player["name"], picture, pid in ready, pid == me))
+    if me in going and me not in ready:
+        st.caption("Tap your detective when you're ready for Round 2.")
     elif me in going:
         st.caption("You're ready. Waiting for the other detectives…")
     else:
         st.caption("The four detectives going through are getting ready for Round 2…")
 
+
+@st.fragment
+def _ready_host(code, me):
+    """The host's override: start Round 2 without waiting for everyone."""
+    tour = storage.load(code)
+    if tour is None or tour["status"] != "round1_results":
+        return
     if rules.is_host(tour, me):
         confirm_key = _key(code, "host_start_r2")
         if st.session_state.get(confirm_key):
