@@ -78,6 +78,8 @@ def apply_theme():
       text-align: center; text-transform: uppercase; white-space: nowrap; background: linear-gradient(180deg, #ffffff 2%, #e4bcff 26%, #87f1ff 56%, #dca7ff 82%, #ffffff 100%);
       -webkit-background-clip: text; background-clip: text; color: transparent;
       -webkit-text-stroke: .35px #f7eaff; text-shadow: 0 0 5px rgba(255,255,255,.95), 0 0 18px rgba(205,116,255,.95), 0 0 38px rgba(89,220,255,.68), 2px 3px 0 #271247; }
+    @media (max-width: 560px) { .mm-wordmark { white-space: normal; font-size: 2.15rem; line-height: 1.1; }
+      .mm-tagline { font-size: .78rem !important; letter-spacing: .05em !important; } }
     .mm-tagline { color: #d7b9ee !important; font-family: Georgia, serif; font-size: 1.1rem; letter-spacing: .08em; text-align: center; }
     .mm-avatar-help { color: #d9c2ec !important; margin: .15rem 0 .65rem; }
     .mm-profile { text-align: center; min-width: 120px; }
@@ -124,34 +126,54 @@ def show_wordmark():
 
 
 def avatar_picker(key, unavailable=()):
-    """Clickable glass portrait cards; occupied portraits are shown as unavailable."""
+    """The detectives as small square cards, 4 per row (on phones too). The chosen
+    one glows with a tick; portraits already taken are greyed out and can't be picked.
+    Uses small copies of the pictures (screens/avatars.py) so the page loads fast."""
+    from screens import avatars          # imported here: avatars.py itself uses this file
+
     choice_key = f"{key}_choice"
     unavailable = set(unavailable)
     if choice_key not in st.session_state or st.session_state[choice_key] in unavailable:
         st.session_state[choice_key] = next((option for option in AVATARS if option not in unavailable), "girl")
-    st.markdown("<div class='mm-avatar-help'>Choose your detective — each portrait can be claimed by one player only.</div>", unsafe_allow_html=True)
     options = list(AVATARS)
-    for start in range(0, len(options), 2):
-        columns = st.columns(2)
-        for column, option in zip(columns, options[start:start + 2]):
-            _, path = AVATARS[option]
-            widget_key = f"{key}_{option}"
-            selected = st.session_state[choice_key] == option
-            taken = option in unavailable
-            selector = f".st-key-{widget_key} div.stButton > button"
-            selected_style = "outline:3px solid #9be4ff !important; outline-offset:2px; box-shadow:0 0 24px rgba(155,228,255,.58) !important;" if selected else ""
-            st.markdown(f"""<style>
-            {selector} {{ background: linear-gradient(rgba(30,14,58,.12), rgba(30,14,58,.55)), url('{avatar_data_url(path)}') center / auto 158px no-repeat, rgba(255,255,255,.08) !important;
-              border:1px solid rgba(226,183,255,.72) !important; border-radius:18px !important; min-height:190px; padding:158px .3rem .4rem !important;
-              transition:transform .15s ease, box-shadow .15s ease; {selected_style} {'opacity:.28 !important; filter:grayscale(1);' if taken else ''} }}
-            {selector}:hover {{ transform:translateY(-4px); box-shadow:0 0 22px rgba(203,151,255,.55) !important; }}
-            {selector} p {{ color:transparent !important; font-size:0 !important; }}
-            {selector}::after {{ content:'✓'; color:#fff; font-size:1.55rem; opacity:{'1' if selected else '0'}; position:absolute; right:.65rem; top:.4rem; text-shadow:0 0 8px #62d4ff; }}
-            </style>""", unsafe_allow_html=True)
-            with column:
-                if st.button(" ", key=widget_key, width="stretch", disabled=taken):
-                    st.session_state[choice_key] = option
-                    st.rerun()
+    chosen = st.session_state[choice_key]
+
+    css = [f"""
+.st-key-{key}_grid {{ gap: .5rem !important; }}
+.st-key-{key}_grid [data-testid="stHorizontalBlock"] {{ flex-wrap: nowrap !important; gap: .5rem !important; }}
+.st-key-{key}_grid [data-testid="stColumn"] {{ min-width: 0 !important; width: auto !important; flex: 1 1 0 !important; }}
+.st-key-{key}_grid div.stButton > button {{ position: relative; width: 100%; aspect-ratio: 1 / 1; min-height: 0 !important;
+  padding: 0 !important; border-radius: 14px !important; border: 1px solid rgba(255,255,255,.14) !important;
+  box-shadow: none !important; transition: transform .15s ease, box-shadow .15s ease; }}
+.st-key-{key}_grid div.stButton > button:hover {{ transform: translateY(-3px); box-shadow: 0 0 16px rgba(181,123,255,.5) !important; }}
+.st-key-{key}_grid div.stButton > button p {{ font-size: 0 !important; }}
+.st-key-{key}_grid div.stButton > button:disabled {{ opacity: 1 !important; filter: grayscale(1) brightness(.55); cursor: not-allowed; }}
+.st-key-{key}_grid div.stButton > button:disabled::after {{ content: 'taken'; position: absolute; left: 0; right: 0; bottom: 3px;
+  color: #e4e7efcc; font-size: .62rem; font-weight: 700; }}
+.st-key-{key}_grid [data-testid="stHorizontalBlock"] + [data-testid="stHorizontalBlock"] {{ margin-top: .5rem; }}"""]
+    for option in options:
+        _, path = AVATARS[option]
+        picture = avatars.thumbnail(path, 200)
+        selector = f".st-key-{key}_{option} div.stButton > button"
+        css.append(f"{selector} {{ background: url('{picture}') center bottom / auto 90% no-repeat, "
+                   "radial-gradient(circle at 50% 30%, #4b2a86, #1d1438 75%) !important; }")
+    css.append(f""".st-key-{key}_{chosen} div.stButton > button {{ border: 2px solid #9be4ff !important;
+  box-shadow: 0 0 16px rgba(155,228,255,.55) !important; }}
+.st-key-{key}_{chosen} div.stButton > button::after {{ content: '✓'; position: absolute; top: 3px; right: 7px;
+  color: #9be4ff; font-weight: 900; font-size: 1rem; text-shadow: 0 0 6px #000; }}""")
+    st.markdown("<div class='mm-label'>Choose your detective</div><style>" + "".join(css) + "</style>",
+                unsafe_allow_html=True)
+
+    with st.container(key=f"{key}_grid"):
+        for start in range(0, len(options), 4):
+            columns = st.columns(4)
+            for column, option in zip(columns, options[start:start + 4]):
+                label, _ = AVATARS[option]
+                with column:
+                    if st.button(label, key=f"{key}_{option}", width="stretch", disabled=option in unavailable,
+                                 help=label):
+                        st.session_state[choice_key] = option
+                        st.rerun()
     return st.session_state[choice_key]
 
 
