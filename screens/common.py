@@ -142,13 +142,16 @@ def avatar_picker(key, unavailable=()):
 .st-key-{key}_grid {{ gap: .5rem !important; }}
 .st-key-{key}_grid [data-testid="stHorizontalBlock"] {{ flex-wrap: nowrap !important; gap: .5rem !important; }}
 .st-key-{key}_grid [data-testid="stColumn"] {{ min-width: 0 !important; width: auto !important; flex: 1 1 0 !important; }}
-.st-key-{key}_grid [data-testid="stImage"] {{ border-radius: 14px 14px 0 0; overflow: hidden;
+.st-key-{key}_grid [data-testid="stImage"] {{ border-radius: 14px; overflow: hidden;
   background: radial-gradient(circle at 50% 30%, #4b2a86, #1d1438 75%); }}
 .st-key-{key}_grid [data-testid="stImage"] img {{ aspect-ratio: 1 / 1; object-fit: contain; }}
-.st-key-{key}_grid div.stButton > button {{ position: relative; width: 100%; min-height: 2.2rem !important;
-  padding: .25rem !important; border-radius: 0 0 14px 14px !important; border: 1px solid rgba(255,255,255,.14) !important;
-  box-shadow: none !important; transition: transform .15s ease, box-shadow .15s ease; }}
-.st-key-{key}_grid div.stButton > button:hover {{ transform: translateY(-3px); box-shadow: 0 0 16px rgba(181,123,255,.5) !important; }}
+.st-key-{key}_grid div.stButton {{ margin-top: -100%; position: relative; z-index: 1; }}
+.st-key-{key}_grid div.stButton > button {{ position: relative; width: 100%; aspect-ratio: 1 / 1; min-height: 0 !important;
+  padding: 0 !important; border-radius: 14px !important; border: 2px solid transparent !important;
+  background: transparent !important; box-shadow: none !important; transition: transform .15s ease, box-shadow .15s ease; }}
+.st-key-{key}_grid div.stButton > button:hover {{ transform:translateY(-3px); border-color:#b57bff !important;
+  box-shadow:0 0 16px rgba(181,123,255,.5) !important; }}
+.st-key-{key}_grid div.stButton > button p {{ font-size:0 !important; }}
 .st-key-{key}_grid div.stButton > button:disabled {{ opacity: 1 !important; filter: grayscale(1) brightness(.55); cursor: not-allowed; }}
 .st-key-{key}_grid [data-testid="stHorizontalBlock"] + [data-testid="stHorizontalBlock"] {{ margin-top: .5rem; }}"""]
     css.append(f""".st-key-{key}_{chosen} div.stButton > button {{ border: 2px solid #9be4ff !important;
