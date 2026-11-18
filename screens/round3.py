@@ -8,10 +8,11 @@ import time
 import streamlit as st
 
 import round1 as r1
+import fan_vote
 import round3 as r3
 import storage
 import tournament as rules
-from screens import art, common
+from screens import art, avatars, common, spectate
 
 DETECTIVE_IMAGE = Path(__file__).resolve().parents[1] / "assets" / "detective-purple.png"
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
@@ -126,6 +127,13 @@ def _story_style():
 
 
 def show(code, me):
+    # Spectators: crowd bar + reactions at the top, their own buttons at the bottom.
+    tour = spectate.start(code, me)
+    _show_round(code, me)
+    spectate.panel(code, tour, me)
+
+
+def _show_round(code, me):
     # Keep the briefing in one browser render: the character animation can then
     # progress smoothly instead of restarting in the live timer fragment.
     tour = storage.load(code)
@@ -297,18 +305,222 @@ def _theory_choice_cards(code, group, question, options):
 
 
 def _results(tour, me):
+    """First a 10-second fan-favourite vote, then the stage: the yellow spotlight
+    sweeps over the podium and the crowd and stops on the champion."""
     state = tour["round3"]
-    winner = rules.find_player(tour, state["winner"])
-    st.title("The Moonstone Vault Opens")
-    _winner_lineup(tour, winner)
-    _podium(tour, winner)
-    champion = "You are the Mastermind champion!" if me == state["winner"] else f"{html.escape(common.player_label(winner))} is the Mastermind champion!"
-    st.markdown(f"<div class='r3-vault-lock'><div class='r3-vault-lock-title'>✦ {champion}</div></div>", unsafe_allow_html=True)
+    now = time.time()
+    if fan_vote.is_open(tour, now):
+        _fan_vote_screen(tour, me, now)
+        return
+    _final_stage(tour, me, now)
+    st.markdown(spectate.calls_summary(tour, "round3"), unsafe_allow_html=True)
 
     st.subheader("Solution")
     st.markdown(_solution_cards(), unsafe_allow_html=True)
     st.info("Nova marker: **3** · Conservatory marker: **1** · Map marker: **8**  \n### Moonstone Vault code: `318`")
     st.caption(f"Winner decided by: {state['decided_by']}.")
+
+
+# --- the fan-favourite vote (10 seconds, everyone) -------------------------------------
+
+@st.fragment(run_every="1s")
+def _vote_watch(code, closes):
+    """Shows how many have voted; redraws the page when the vote closes."""
+    tour = storage.load(code)
+    if tour is None:
+        return
+    now = time.time()
+    if now >= fan_vote.closes_at(tour) or fan_vote.closes_at(tour) != closes:
+        st.rerun()
+    voted = len((tour.get("fan_vote") or {}).get("votes", {}))
+    st.caption(f"{voted} of {len(tour['players'])} detectives have voted")
+
+
+def _fan_vote_screen(tour, me, now):
+    code = tour["code"]
+    closes = fan_vote.closes_at(tour)
+    st.title("The verdict is in…")
+    st.markdown(art.heading("finish", "Vote for the fan favourite", size=34, level=2), unsafe_allow_html=True)
+    st.caption("Who made this game more fun? Your votes decide podium place 3. "
+               "You can't vote for yourself or for the two finalists.")
+    seconds = max(1, int(closes - now + 0.999))
+    st.markdown(art.countdown(f"fan_{int(closes)}", seconds, fan_vote.VOTE_SECONDS, "Vote closes in", urgent=3),
+                unsafe_allow_html=True)
+    _vote_watch(code, closes)
+
+    mine = fan_vote.my_vote(tour, me)
+    if mine is not None:
+        name = html.escape(rules.find_player(tour, mine)["name"])
+        st.markdown(art.banner("through", f"Vote counted for {name}! The podium is coming…"), unsafe_allow_html=True)
+        return
+    choices = fan_vote.candidates(tour, me)
+    per_row = 3
+    for start in range(0, len(choices), per_row):
+        row = choices[start:start + per_row]
+        key = art.css_key(f"grid_fan_{start}")
+        st.markdown(art.phone_grid_style(key), unsafe_allow_html=True)
+        with st.container(key=key):
+            columns = st.columns(per_row)
+        for column, pid in zip(columns, row):
+            player = rules.find_player(tour, pid)
+            button_key = art.css_key(f"fan_{pid}")
+            with column:
+                st.markdown(spectate._choice_style(button_key, [avatars.picture(player, 200)]), unsafe_allow_html=True)
+                if st.button(common.player_label(player), key=button_key, width="stretch"):
+                    _, message = storage.update(code, fan_vote.vote, me, pid, time.time())
+                    st.toast(message)
+                    st.rerun()
+
+
+# --- the final stage: one yellow spotlight sweep, then the podium is revealed ------------
+
+SPOT_ON = 0.9                                   # the podium has risen; the spotlight switches on
+SWEEP = [(-32, .55), (30, .6), (-26, .62), (22, .65), (-15, .7), (10, .72), (-4, .7), (1.5, .6), (0, .5)]
+REVEAL_OTHERS = 0.8                             # places 2 and 3 appear this long after the champion
+
+
+def _spotlight_times():
+    """(angles, arrival times) of the spotlight: wide sweeps over the stage and the
+    crowd, each one smaller and slower, until it points straight down at place 1."""
+    angles, times, t = [0], [SPOT_ON], SPOT_ON
+    for angle, duration in SWEEP:
+        t += duration
+        angles.append(angle)
+        times.append(t)
+    return angles, times
+
+
+def _stage_timeline():
+    _, times = _spotlight_times()
+    land = times[-1]                            # the light stops on place 1: the champion is revealed
+    return land, land + REVEAL_OTHERS, land + REVEAL_OTHERS + 1.2
+
+
+def _stage_offset(tour, end):
+    """Seconds since the stage started for EVERYONE (it starts when the vote closes,
+    which every phone knows), or None once it is long over. Redraws carry on."""
+    elapsed = time.time() - fan_vote.closes_at(tour)
+    return elapsed if elapsed < end + 3 else None
+
+
+def _stage_css(offset):
+    land, others, end = _stage_timeline()
+    angles, times = _spotlight_times()
+    total = times[-1]
+    base = f"""
+.r3-champion-title {{ position: relative; text-align: center; margin: .2rem 0 .6rem; min-height: 3.2rem;
+    font-family: Cinzel, Georgia, serif; font-weight: 900; font-size: clamp(1.35rem, 5.4vw, 2.3rem); line-height: 1.15; color: #fff; }}
+.r3-ct-wait, .r3-ct-done {{ display: block; }}
+.r3-ct-done {{ background: linear-gradient(90deg, #ffe9a6, #fff, #ffe9a6); -webkit-background-clip: text; background-clip: text;
+    color: transparent; filter: drop-shadow(0 0 14px #ffd76a); }}
+.r3-stage {{ position: relative; max-width: 640px; margin: 0 auto 1rem; padding-top: 70px; overflow: hidden; border-radius: 22px;
+    background: radial-gradient(ellipse 70% 30% at 50% 100%, #3a1e66, transparent 70%); }}
+.r3-stage .r3-podium {{ position: relative; z-index: 2; margin: 0 0 0; }}
+.r3-stage .r3-place {{ position: relative; overflow: hidden; }}
+.r3-cover {{ position: absolute; inset: 0; z-index: 3; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(160deg, #2a1550, #140a2a); border-radius: inherit;
+    font-family: Cinzel, Georgia, serif; font-size: 2.6rem; font-weight: 900; color: #b48cff66; }}
+.r3-floor {{ position: absolute; left: 4%; right: 4%; bottom: 10px; height: 90px; z-index: 0; border-radius: 50%;
+    background: radial-gradient(ellipse at center, #5b2c9a 0, #2a1550 60%, transparent 72%); }}
+.r3-crowd {{ position: relative; z-index: 4; display: flex; flex-wrap: wrap; justify-content: center; gap: 0 .2rem;
+    margin: .5rem auto .4rem; max-width: 560px; padding-bottom: .6rem; }}
+.r3-fan {{ width: 84px; text-align: center; animation: r3-idle 2.4s ease-in-out infinite; animation-delay: calc(var(--i) * -.37s); }}
+.r3-fan:nth-child(even) {{ margin-top: 14px; }}
+.r3-fan img {{ height: 86px; max-width: 100%; object-fit: contain; filter: drop-shadow(0 6px 8px #000a); }}
+.r3-fan span {{ display: block; margin-top: -4px; color: #fff; font-size: .7rem; font-weight: 800; text-shadow: 0 1px 4px #000;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+@keyframes r3-idle {{ 0%,100% {{ transform: translateY(0); }} 50% {{ transform: translateY(-4px); }} }}
+@keyframes r3-cheer {{ 0%,100% {{ transform: translateY(0) scale(1); }} 40% {{ transform: translateY(-16px) scale(1.05); }} }}
+.r3-lamp {{ position: absolute; top: 4px; left: 50%; width: 34px; height: 22px; margin-left: -17px; z-index: 6;
+    border-radius: 10px 10px 6px 6px; background: linear-gradient(#3b3550, #1b1726); box-shadow: 0 0 18px #ffd76a, inset 0 -5px 0 #ffd76a; }}
+.r3-spot {{ position: absolute; top: 18px; left: 50%; width: 0; height: 350px; z-index: 5; transform-origin: 50% 0;
+    pointer-events: none; }}
+.r3-spot::before {{ content: ''; position: absolute; top: 0; left: -105px; width: 210px; height: 100%;
+    clip-path: polygon(44% 0, 56% 0, 100% 100%, 0 100%); mix-blend-mode: screen; filter: blur(1.5px);
+    background: linear-gradient(to bottom, rgba(255,240,170,.95), rgba(255,215,90,.45) 55%, rgba(255,210,80,.18)); }}
+.r3-spot::after {{ content: ''; position: absolute; bottom: -18px; left: -110px; width: 220px; height: 44px; border-radius: 50%;
+    background: radial-gradient(ellipse, rgba(255,226,120,.6), transparent 70%); mix-blend-mode: screen; }}
+.r3-dim {{ position: absolute; inset: 0; z-index: 4; pointer-events: none; background: rgba(8,3,20,.55); opacity: 0; }}
+@media (max-width: 560px) {{
+  .r3-fan {{ width: 62px; }} .r3-fan img {{ height: 64px; }} .r3-fan span {{ font-size: .58rem; }}
+  .r3-spot {{ height: 300px; }} .r3-spot::before {{ left: -80px; width: 160px; }} .r3-spot::after {{ left: -85px; width: 170px; }} }}
+"""
+    if offset is None:              # long over: everything simply in place, the light resting on the champion
+        return base + """
+.r3-stage .r3-podium { animation: none !important; } .r3-cover { display: none; } .r3-ct-wait { display: none; }
+.r3-spot { transform: rotate(0deg); } .r3-place-one { box-shadow: 0 0 40px #ffd76a, inset 0 1px 25px rgba(255,255,255,.25) !important; }"""
+    o = offset
+    frames = " ".join(f"{100 * t / total:.2f}% {{ transform: rotate({a}deg); opacity: {0 if t < SPOT_ON else 1}; }}"
+                      for a, t in zip([angles[0]] + angles, [0] + times))
+    frames = frames.replace(f"{100 * SPOT_ON / total:.2f}% {{ transform: rotate(0deg); opacity: 0; }}",
+                            f"{100 * SPOT_ON / total:.2f}% {{ transform: rotate(0deg); opacity: 1; }}")
+    return base + f"""
+@keyframes r3-spot-sweep {{ {frames} }}
+@keyframes r3-flicker {{ 0% {{ opacity: 0; }} 20% {{ opacity: 1; }} 30% {{ opacity: .2; }} 45% {{ opacity: 1; }} 55% {{ opacity: .5; }} 70%,100% {{ opacity: 1; }} }}
+@keyframes r3-gone {{ to {{ opacity: 0; visibility: hidden; }} }}
+@keyframes r3-dim-in-out {{ 0% {{ opacity: 0; }} 15% {{ opacity: 1; }} 85% {{ opacity: 1; }} 100% {{ opacity: 0; }} }}
+@keyframes r3-show {{ from {{ opacity: 0; visibility: hidden; }} to {{ opacity: 1; visibility: visible; }} }}
+@keyframes r3-champ-pop {{ 0% {{ transform: scale(1); }} 45% {{ transform: scale(1.08); box-shadow: 0 0 60px #ffd76a; }}
+                           100% {{ transform: scale(1); box-shadow: 0 0 40px #ffd76a, inset 0 1px 25px rgba(255,255,255,.25); }} }}
+.r3-stage .r3-podium {{ animation: r3-podium-rise .9s cubic-bezier(.2,.8,.2,1) {-o:.2f}s both !important; }}
+.r3-spot {{ animation: r3-spot-sweep {total:.2f}s ease-in-out {-o:.2f}s both; }}
+.r3-lamp {{ animation: r3-flicker .5s linear {SPOT_ON - .3 - o:.2f}s both; }}
+.r3-dim {{ animation: r3-dim-in-out {land + .6:.2f}s linear {-o:.2f}s both; }}
+.r3-place-one .r3-cover {{ animation: r3-gone .35s ease-out {land - o:.2f}s both; }}
+.r3-place-two .r3-cover, .r3-place-three .r3-cover {{ animation: r3-gone .35s ease-out {others - o:.2f}s both; }}
+.r3-place-one {{ animation: r3-champ-pop .7s ease-out {land - o:.2f}s both; }}
+.r3-ct-wait {{ animation: r3-gone .01s {land - o:.2f}s both; position: absolute; left: 0; right: 0; }}
+.r3-ct-done {{ animation: r3-show .5s ease-out {land - o:.2f}s both; }}
+.r3-stage .r3-confetti, .mm-calls {{ animation: r3-show .4s {others - o:.2f}s both; }}
+.r3-fan {{ animation: r3-idle 2.4s ease-in-out calc(var(--i) * -.37s) infinite, r3-cheer .45s ease-out {land + .1 - o:.2f}s 4; }}
+"""
+
+
+def _final_stage(tour, me, now):
+    state = tour["round3"]
+    winner = rules.find_player(tour, state["winner"])
+    land, others, end = _stage_timeline()
+    offset = _stage_offset(tour, end)
+
+    # Title first (the most important line), hidden behind "…" until the light lands.
+    champion = ("You are the Mastermind champion!" if me == state["winner"]
+                else f"{html.escape(winner['name'])} is the Mastermind champion!")
+    st.markdown(f"<style>{_stage_css(offset)}</style>"
+                f"<div class='r3-champion-title'><span class='r3-ct-wait'>And the Mastermind champion is…</span>"
+                f"<span class='r3-ct-done'>{champion}</span></div>", unsafe_allow_html=True)
+
+    # The podium: 1 champion, 2 the other finalist, 3 the fan favourite.
+    finalists = [rules.find_player(tour, pid) for pid in state["finalists"]]
+    runner_up = next((p for p in finalists if p and p["id"] != winner["id"]), None)
+    third = fan_vote.favourite(tour)
+    fan = rules.find_player(tour, third[0]) if third else None
+    places = []
+    if runner_up:
+        places.append(_podium_place(runner_up, 2, "Finalist", "r3-place-two"))
+    places.append(_podium_place(winner, 1, "Mastermind champion", "r3-place-one"))
+    if fan:
+        note = f"Fan favourite · {third[1]} vote{'s' if third[1] != 1 else ''}" if third[1] else third[2]
+        places.append(_podium_place(fan, 3, note, "r3-place-three"))
+
+    # Everyone else stands in the crowd in front of the podium.
+    on_podium = {p["id"] for p in (winner, runner_up, fan) if p}
+    crowd = "".join(
+        f"<div class='r3-fan' style='--i:{k}'><img src='{avatars.picture(p, 200)}' alt=''><span>{html.escape(p['name'])}</span></div>"
+        for k, p in enumerate(p for p in tour["players"] if p["id"] not in on_podium))
+    confetti = "".join(f"<i style='--x:{x}%;--c:{colour};animation-delay:{delay}s'></i>" for x, colour, delay in
+                       ((8, '#f7d84a', 0), (19, '#f07bda', .4), (31, '#89e4ff', .8), (45, '#fff', .2),
+                        (58, '#f7d84a', 1), (71, '#b990ff', .55), (86, '#6ff0c1', .95)))
+    st.markdown("<div class='r3-stage'><div class='r3-floor'></div><div class='r3-lamp'></div><div class='r3-spot'></div>"
+                f"<div class='r3-confetti'>{confetti}</div><div class='r3-podium'>{''.join(places)}</div>"
+                f"<div class='r3-dim'></div><div class='r3-crowd'>{crowd}</div></div>", unsafe_allow_html=True)
+
+
+def _podium_place(player, place, note, css_class):
+    """One podium block (the team's design), with a cover that hides who stands on it
+    until the spotlight reveals it."""
+    return (f"<div class='r3-place {css_class}'><div class='r3-cover'>?</div><img src='{avatars.picture(player, 240)}' alt=''>"
+            f"<div class='r3-place-number'>{place}</div><div class='r3-place-name'>{html.escape(player['name'])}</div>"
+            f"<div class='r3-place-note'>{html.escape(note)}</div></div>")
 
 
 def _solution_cards():
@@ -322,47 +534,3 @@ def _solution_cards():
                   f"<div class='r3-solution-icon' aria-label='{value}'>{icon}</div>")
         cards.append(f"<div class='r3-solution-card'>{visual}<div class='r3-solution-kind'>{kind}</div><div class='r3-solution-value'>{value}</div></div>")
     return "<div class='r3-solution-grid'>" + "".join(cards) + "</div>"
-
-
-def _winner_lineup(tour, winner):
-    """Show every guest, then let a themed hanging light identify the champion."""
-    players = []
-    winner_index = 0
-    for index, player in enumerate(tour["players"]):
-        _, path = common.AVATARS.get(player.get("appearance"), common.AVATARS["girl"])
-        is_winner = player["id"] == winner["id"]
-        if is_winner:
-            winner_index = index
-        css = " r3-lineup-winner" if is_winner else ""
-        players.append(f"<div class='r3-lineup-player{css}'><img src='{common.avatar_data_url(path)}' alt=''><div>{html.escape(player['name'])}</div></div>")
-    target = (winner_index + .5) / max(1, len(tour["players"])) * 100
-    light = f"<span class='r3-hanging-light' style='--target:{target:.3f}%' aria-hidden='true'></span>"
-    st.markdown("<div class='r3-winner-lineup-title'>THE MANSION GUESTS</div><div class='r3-winner-lineup'>" + light + "".join(players) + "</div>", unsafe_allow_html=True)
-
-
-def _podium(tour, winner):
-    """Celebrate the champion and two real, non-invented honours."""
-    finalists = [rules.find_player(tour, player_id) for player_id in tour["round3"]["finalists"]]
-    runner_up = next((player for player in finalists if player and player["id"] != winner["id"]), None)
-    excluded = {winner["id"]} | ({runner_up["id"]} if runner_up else set())
-    candidates = [player for player in tour["players"] if player["id"] not in excluded]
-    if tour.get("round1") and candidates:
-        honourable = min(candidates, key=lambda player: (-r1.points(tour, player["id"]), r1.total_seconds(tour, player["id"]), player["name"].casefold()))
-    else:
-        honourable = candidates[0] if candidates else None
-
-    confetti = "".join(f"<i style='--x:{x}%;--c:{colour};animation-delay:{delay}s'></i>" for x, colour, delay in ((8, '#f7d84a', 0), (19, '#f07bda', .4), (31, '#89e4ff', .8), (45, '#fff', .2), (58, '#f7d84a', 1), (71, '#b990ff', .55), (86, '#6ff0c1', .95)))
-    places = []
-    if runner_up:
-        places.append(_podium_place(runner_up, 2, "Finalist", "r3-place-two"))
-    places.append(_podium_place(winner, 1, "Mastermind champion", "r3-place-one"))
-    if honourable:
-        places.append(_podium_place(honourable, 3, "Round 1 ace", "r3-place-three"))
-    st.markdown(f"<div class='r3-confetti'>{confetti}</div><div class='r3-podium'>{''.join(places)}</div>", unsafe_allow_html=True)
-
-
-def _podium_place(player, place, note, css_class):
-    _, path = common.AVATARS.get(player.get("appearance"), common.AVATARS["girl"])
-    return (f"<div class='r3-place {css_class}'><img src='{common.avatar_data_url(path)}' alt=''>"
-            f"<div class='r3-place-number'>{place}</div><div class='r3-place-name'>{html.escape(player['name'])}</div>"
-            f"<div class='r3-place-note'>{note}</div></div>")

@@ -22,7 +22,7 @@ import streamlit as st
 import round1 as r1
 import storage
 import tournament as rules
-from screens import art, common, duels
+from screens import art, avatars, common, duels
 
 WAITING_LINES = [
     "Dusting the bookshelves for fingerprints…",
@@ -105,14 +105,14 @@ def _racer(tour, pid, now):
     player = rules.find_player(tour, pid)
     status = ("left" if r1.has_left(tour, pid)
               else "finished" if r1.is_done(tour, pid) else "playing")
-    return {"name": player["name"], "picture": _picture(player),
+    return {"name": player["name"], "picture": _picture(player, 96),
             "progress": r1.progress(tour, pid, now), "status": status}
 
 
-def _picture(player):
-    """The player's avatar image, ready to put in our own HTML."""
-    _, path = common.AVATARS.get(player.get("appearance") or "girl", common.AVATARS["girl"])
-    return common.avatar_data_url(path)
+def _picture(player, size=160):
+    """The player's avatar as a small image (a few KB instead of up to 2 MB), ready
+    to put in our own HTML. Matters most on screens that refresh every second."""
+    return avatars.picture(player, size)
 
 
 def _stamp_if_moved_on(code, tour, me):
@@ -207,7 +207,7 @@ def _intro(tour, me):
     opponent = rules.opponent_of(tour, me)
     you = rules.find_player(tour, me)
     st.markdown("### Your first suspect is… your opponent.")
-    _html(art.vs_intro((you["name"], _picture(you)), (opponent["name"], _picture(opponent))))
+    _html(art.vs_intro((you["name"], _picture(you, 360)), (opponent["name"], _picture(opponent, 360))))
     order = r1.order_of(tour, me)
     _html("<p><b>Your four games:</b> " + " &nbsp;→&nbsp; ".join(
         f"{art.icon(g, 22)}{r1.GAMES[g]}" for g in order) + "</p>")
@@ -509,8 +509,7 @@ def _ready_lineup(code, me):
     _html('<div class="mm-rl-title">READY FOR ROUND 2</div>')
     for column, pid in zip(_grid("ready_lineup", len(going)), going):
         player = rules.find_player(tour, pid)
-        _, path = common.AVATARS.get(player.get("appearance") or "girl", common.AVATARS["girl"])
-        picture = common.avatar_data_url(path)
+        picture = _picture(player, 240)
         with column:
             if pid == me and pid not in ready:
                 _html(art.ready_tap_style("ready_tap", picture))

@@ -8,12 +8,15 @@ import streamlit as st
 import round2 as rules
 import storage
 import tournament
-from screens import art, common
+from screens import art, common, spectate
 
 REFRESH = "2s"
 
 def show(code, me):
+    # Spectators: crowd bar + reactions at the top, their own buttons at the bottom.
+    tour = spectate.start(code, me)
     _live_round(code, me)
+    spectate.panel(code, tour, me)
 
 
 @st.fragment(run_every=REFRESH)
@@ -138,6 +141,7 @@ def _end_screen(code, tour, me, view):
         st.markdown(art.banner("eliminated", "Your duo was eliminated. Stay and watch the final!", good=False),
                     unsafe_allow_html=True)
 
+    st.markdown(spectate.calls_summary(tour, "round2"), unsafe_allow_html=True)
     winners_html = "".join(common.profile_card(player, "passed") for player in winner_players)
     st.markdown(
         "<style>"
