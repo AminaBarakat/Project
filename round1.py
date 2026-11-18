@@ -32,7 +32,7 @@ import random
 
 import round2 as duo_round
 
-INTRO_SECONDS = 5
+INTRO_SECONDS = 8           # long enough for the VS moment and a look at your four games
 GAME_SECONDS = 60
 TIEBREAK_SECONDS = 30
 RESULTS_SECONDS = 10        # (no longer used to move on: Round 2 starts when everyone is ready)
