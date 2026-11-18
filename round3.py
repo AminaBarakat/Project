@@ -31,9 +31,11 @@ CLUES = (
 SOLUTION = {"suspect": "Nova", "room": "Conservatory", "object": "Map"}
 FINAL_CODE = "318"
 STORY = (
-    "Detective, the earlier games were security tests inside the mansion.\n\n"
-    "During the final blackout, someone stole the Moonstone Key.\n\n"
-    "Find the thief, the hiding place, and the code that opens its vault."
+    "Detective, the earlier games were security tests\n"
+    "inside the mansion.\n"
+    "During the final blackout, someone stole\n"
+    "the Moonstone Key.\n"
+    "Find the thief, hiding place, and vault code."
 )
 FINAL_QUESTION = "…Who took the Moonstone Key?"
 

@@ -641,7 +641,7 @@ def shackle():
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 120" width="240" height="120">{body}</svg>'
 
 
-def lock_style(key):
+def lock_style(key, digits=4):
     """CSS that turns the container with this key into the padlock's body, and the
     text box inside it into four dial windows: the digits you type appear right in
     the windows. Overrides the team theme's pale input boxes inside the lock only."""
@@ -649,6 +649,9 @@ def lock_style(key):
     c = f".st-key-{k}"
     # Courier New digits are exactly 0.6em wide; each window is 1.2em wide and the
     # pitch (window + gap) is 1.5em, matched by letter-spacing 0.9em.
+    if digits < 1:
+        raise ValueError("A lock needs at least one digit window.")
+    input_width = f"{digits * 1.5 - .15:.2f}em"
     windows = (f"repeating-linear-gradient(90deg, {IVORY} 0 1.2em, transparent 1.2em 1.5em)")
     return f"""<style>
 {c} {{ background: linear-gradient(160deg, {SILVER}, #aeb3c2) !important; border: 4px solid {PURPLE} !important;
@@ -660,7 +663,7 @@ def lock_style(key):
       font-family: "Courier New", Courier, monospace !important; font-size: 2.2rem !important; font-weight: 700 !important;
       letter-spacing: .9em !important; color: {BG} !important; -webkit-text-fill-color: {BG} !important;
       caret-color: {PURPLE} !important; text-align: left !important;
-      width: 5.85em !important; padding: .15em 0 .15em .3em !important; margin: 0 auto !important; display: block;
+      width: {input_width} !important; padding: .15em 0 .15em .3em !important; margin: 0 auto !important; display: block;
       background: {windows} !important; border-radius: 6px; }}
 {c} input::placeholder {{ color: #9aa0b0 !important; -webkit-text-fill-color: #9aa0b0 !important; opacity: 1 !important; }}
 {c} div.stFormSubmitButton > button {{ width: 100%; margin-top: .6rem; }}
