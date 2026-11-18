@@ -11,7 +11,7 @@ import round1 as r1
 import round3 as r3
 import storage
 import tournament as rules
-from screens import common
+from screens import art, common
 
 DETECTIVE_IMAGE = Path(__file__).resolve().parents[1] / "assets" / "detective-purple.png"
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
@@ -58,9 +58,8 @@ def _story_style():
       font-family: Georgia, serif; font-size: clamp(1.08rem, 2.3vw, 1.34rem); line-height: 1.62; min-height: 210px; padding: 1.4rem 1.55rem; }
     .r3-typed-text { display:block; }
     .r3-typed-line { display:block; max-width:100%; overflow:hidden; white-space:nowrap; width:0;
-      animation:r3-type-line 2.1s steps(42, end) forwards; }
-    .r3-typed-line + .r3-typed-line { margin-top:.8rem; animation-delay:2.2s; }
-    .r3-typed-line + .r3-typed-line + .r3-typed-line { animation-delay:4.4s; }
+      animation:r3-type-line 1.65s steps(38, end) forwards; animation-delay:var(--delay); }
+    .r3-typed-line + .r3-typed-line { margin-top:.38rem; }
     .r3-cursor { color: #e6a7ff; animation: r3-blink .75s step-end infinite; }
     .r3-question { color: #fff; font-family: Georgia, serif; font-size: 1.5rem; font-style: italic; line-height: 1.35;
       padding: 1.2rem .3rem .2rem; text-align: center; }
@@ -80,7 +79,7 @@ def _story_style():
     .r3-case-card { background:rgba(19,8,39,.58); border:1px solid rgba(220,190,255,.38); border-radius:16px; overflow:hidden; padding:.45rem; text-align:center; }
     .r3-case-card img { background:#eee8f3; border-radius:11px; display:block; height:136px; mix-blend-mode:normal; object-fit:contain; width:100%; }
     .r3-case-card span { color:#f8f2ff; display:block; font-family:ui-sans-serif, system-ui, sans-serif; font-weight:800; padding:.45rem .15rem .12rem; }
-    .r3-evidence-marker { align-items:center; background:linear-gradient(135deg,#b76cff,#65e8ff); border:2px solid #f8f2ff; border-radius:50%; box-shadow:0 0 13px rgba(151,220,255,.85); color:#19082e; display:inline-flex; font-family:Cinzel, Georgia, serif; font-size:.76rem; font-weight:900; height:25px; justify-content:center; margin-left:.38rem; vertical-align:middle; width:25px; }
+    .r3-evidence-marker { align-items:center; background:linear-gradient(135deg,rgba(112,54,191,.92),rgba(195,132,255,.9)); border:2px solid rgba(245,228,255,.94); border-radius:50%; box-shadow:0 0 13px rgba(193,120,255,.86); color:#fff; display:inline-flex; font-family:Cinzel, Georgia, serif; font-size:.76rem; font-weight:900; height:25px; justify-content:center; margin-left:.38rem; text-shadow:0 0 5px #35105e; vertical-align:middle; width:25px; }
     .r3-object-card { align-items:center; background:rgba(19,8,39,.58); border:1px solid rgba(220,190,255,.38); border-radius:16px; display:flex; gap:.55rem; justify-content:center; min-height:82px; padding:.6rem; }
     .r3-object-card b { color:#f8f2ff; font-family:ui-sans-serif, system-ui, sans-serif; }
     .r3-vault-lock { background:linear-gradient(135deg,rgba(100,52,170,.8),rgba(25,78,142,.62)); border:1px solid rgba(166,235,255,.76); border-radius:17px; box-shadow:0 0 25px rgba(155,85,255,.34),inset 0 0 25px rgba(194,235,255,.12); margin:1rem 0 .65rem; padding:.9rem 1rem; text-align:center; }
@@ -95,14 +94,14 @@ def _story_style():
     .r3-choice-label { color:#f8f2ff; font-family:ui-sans-serif, system-ui, sans-serif; font-size:1rem; font-weight:800; margin:.9rem 0 .35rem; }
     .r3-choice-help { color:#d9c2ec; font-size:.88rem; margin-bottom:.55rem; }
     .r3-winner-lineup-title { color:#d7b8f2; font-size:.76rem; font-weight:800; letter-spacing:.16em; margin-top:1rem; text-align:center; }
-    .r3-winner-lineup { align-items:end; display:flex; gap:.55rem; justify-content:center; margin:4.8rem auto 1rem; max-width:850px; }
+    .r3-winner-lineup { align-items:end; display:flex; gap:.55rem; justify-content:center; margin:4.8rem auto 1rem; max-width:850px; position:relative; }
     .r3-lineup-player { color:#d8c9e9; flex:1 1 0; font-size:.67rem; font-weight:800; max-width:92px; opacity:.58; overflow-wrap:anywhere; position:relative; text-align:center; }
     .r3-lineup-player img { border:2px solid rgba(220,190,255,.55); border-radius:50%; height:58px; object-fit:contain; width:58px; }
     .r3-lineup-winner { color:#fff; opacity:1; text-shadow:0 0 12px #dba4ff; }
-    .r3-hanging-light { animation:r3-lamp-drop 1.25s cubic-bezier(.2,.8,.2,1) forwards; height:82px; left:50%; opacity:0; position:absolute; top:-90px; transform:translateX(-50%); width:80px; }
+    .r3-hanging-light { animation:r3-light-slide 2.1s cubic-bezier(.2,.8,.2,1) forwards; height:82px; left:var(--target); opacity:0; position:absolute; top:-90px; transform:translateX(-50%); width:80px; z-index:2; }
     .r3-hanging-light::before { background:linear-gradient(#dfffff,#94e8ff); box-shadow:0 0 9px #baf5ff; content:''; height:63px; left:39px; position:absolute; top:0; width:2px; }
     .r3-hanging-light::after { background:radial-gradient(circle,#fff 0 16%,#9deeff 27%,#9e5aff 56%,transparent 70%); border-radius:50%; box-shadow:0 0 24px 10px rgba(160,224,255,.72); color:#fff; content:'✦'; font-size:21px; height:36px; left:22px; line-height:36px; position:absolute; text-align:center; top:56px; width:36px; }
-    .r3-podium { align-items:end; animation:r3-podium-rise .9s 1.15s cubic-bezier(.2,.8,.2,1) both; display:flex; gap:clamp(.55rem, 3vw, 1.4rem); justify-content:center; margin:1.7rem 0 2rem; min-height:300px; }
+    .r3-podium { align-items:end; animation:r3-podium-rise .9s 2.15s cubic-bezier(.2,.8,.2,1) both; display:flex; gap:clamp(.55rem, 3vw, 1.4rem); justify-content:center; margin:1.1rem 0 1.2rem; min-height:240px; }
     .r3-place { background:linear-gradient(145deg, rgba(109, 75, 164, .7), rgba(29, 55, 107, .65)); border:1px solid rgba(202, 229, 255, .48); border-radius:18px 18px 5px 5px; box-shadow:inset 0 1px 18px rgba(246, 235, 255, .14), 0 12px 24px rgba(0,0,0,.24); display:flex; flex-direction:column; justify-content:flex-end; padding:.75rem .55rem; text-align:center; width:min(29vw, 190px); }
     .r3-place-one { background:linear-gradient(145deg, rgba(157, 91, 224, .88), rgba(39, 91, 180, .83)); box-shadow:0 0 34px rgba(213, 170, 255, .8), inset 0 1px 25px rgba(255,255,255,.25); min-height:235px; position:relative; }
     .r3-place-two { min-height:180px; } .r3-place-three { min-height:145px; }
@@ -112,7 +111,7 @@ def _story_style():
     .r3-place-one img { filter:drop-shadow(0 0 10px #fff3a2); height:104px; width:104px; }
     .r3-confetti { height:0; position:relative; z-index:3; } .r3-confetti i { animation:r3-confetti 2.8s linear infinite; background:var(--c); display:block; height:10px; left:var(--x); position:absolute; top:-10px; transform:rotate(20deg); width:6px; }
     @keyframes r3-confetti { 0% { opacity:0; transform:translateY(-20px) rotate(0deg) } 12% { opacity:1 } 100% { opacity:0; transform:translateY(260px) rotate(520deg) } }
-    @keyframes r3-lamp-drop { from { opacity:0; transform:translate(-50%,-58px); } to { opacity:1; transform:translate(-50%,0); } }
+    @keyframes r3-light-slide { 0% { left:4%; opacity:0; transform:translate(-50%,-58px); } 12% { opacity:1; } 78% { opacity:1; transform:translate(-50%,0); } 100% { left:var(--target); opacity:1; transform:translate(-50%,0); } }
     @keyframes r3-podium-rise { from { opacity:0; transform:translateY(90px); } to { opacity:1; transform:translateY(0); } }
     @media (max-width: 620px) { .r3-case-grid, .r3-solution-grid { grid-template-columns:1fr; } .r3-case-card img { height:175px; } .r3-typed-line { animation:none; overflow:visible; white-space:normal; width:auto; } .r3-winner-lineup { flex-wrap:wrap; margin-top:2rem; } .r3-lineup-player { flex:0 0 20%; } .r3-hanging-light { display:none; } }
     @media (max-width: 520px) { .r3-podium { gap:.35rem; } .r3-place { width:31vw; padding:.55rem .25rem; } .r3-place img { height:58px; width:58px; } .r3-place-one img { height:76px; width:76px; } .r3-place-name { font-size:.78rem; } }
@@ -134,6 +133,12 @@ def show(code, me):
         _story_style()
         _story(tour, code, me, time.time())
         return
+    # Results must stay in one render. Otherwise the half-second live fragment
+    # restarts their CSS animation and leaves the podium permanently dim.
+    if tour and tour["status"] in ("round3_results", "finished"):
+        _story_style()
+        _results(tour, me)
+        return
     _live_round(code, me)
 
 
@@ -153,7 +158,7 @@ def _live_round(code, me):
     elif tour["status"] == "round3":
         _mystery(tour, code, me, now)
     else:
-        _results(tour, me)
+        st.rerun(scope="app")
 
 
 def _story(tour, code, me, now):
@@ -187,8 +192,8 @@ def _story(tour, code, me, now):
 def _typed_story():
     """Reveal whole lines reliably; per-character animations dropped letters."""
     lines = "".join(
-        f"<span class='r3-typed-line'>{html.escape(line)}</span>"
-        for line in r3.STORY.split("\n\n")
+        f"<span class='r3-typed-line' style='--delay:{number * 1.75:.2f}s'>{html.escape(line)}</span>"
+        for number, line in enumerate(r3.STORY.splitlines())
     )
     return f"<span class='r3-typed-text'>{lines}</span>"
 
@@ -253,8 +258,14 @@ def _mystery(tour, code, me, now):
     room = _theory_choice_cards(code, "room", "Where did they hide it?", r3.ROOMS)
     object_name = _theory_choice_cards(code, "object", "What object did they carry?", r3.OBJECTS)
     st.markdown("<div class='r3-vault-lock'><div class='r3-vault-lock-title'>✦ Moonstone Vault Lock</div><div class='r3-vault-lock-help'>Enter the three evidence markers from your chosen thief, place, and object.</div></div>", unsafe_allow_html=True)
-    vault_code = st.text_input("Three-digit vault code", max_chars=3, placeholder="e.g. 318", key=f"r3_{code}_vault_code")
-    if st.button("Submit theory", type="primary"):
+    lock_key = art.css_key(f"r3_vault_{code}")
+    st.markdown(art.lock_style(lock_key, digits=3), unsafe_allow_html=True)
+    st.markdown('<div style="text-align:center;margin-top:.3rem">' + art.img(art.shackle(), width="130px").replace("margin:auto", "margin:0 auto -4px") + "</div>", unsafe_allow_html=True)
+    with st.container(key=lock_key):
+        with st.form(f"r3_{code}_vault_form", border=False):
+            vault_code = st.text_input("Enter the vault code", max_chars=3, placeholder="···", key=f"r3_{code}_vault_code")
+            submitted = st.form_submit_button("Unlock and submit theory", type="primary")
+    if submitted:
         after, message = storage.update(code, r3.answer, me, suspect, room, object_name, time.time(), vault_code)
         if after is not None and after["status"] == "round3_results":
             st.rerun(scope="app")
@@ -316,13 +327,17 @@ def _solution_cards():
 def _winner_lineup(tour, winner):
     """Show every guest, then let a themed hanging light identify the champion."""
     players = []
-    for player in tour["players"]:
+    winner_index = 0
+    for index, player in enumerate(tour["players"]):
         _, path = common.AVATARS.get(player.get("appearance"), common.AVATARS["girl"])
         is_winner = player["id"] == winner["id"]
-        lamp = "<span class='r3-hanging-light' aria-hidden='true'></span>" if is_winner else ""
+        if is_winner:
+            winner_index = index
         css = " r3-lineup-winner" if is_winner else ""
-        players.append(f"<div class='r3-lineup-player{css}'>{lamp}<img src='{common.avatar_data_url(path)}' alt=''><div>{html.escape(player['name'])}</div></div>")
-    st.markdown("<div class='r3-winner-lineup-title'>THE MANSION GUESTS</div><div class='r3-winner-lineup'>" + "".join(players) + "</div>", unsafe_allow_html=True)
+        players.append(f"<div class='r3-lineup-player{css}'><img src='{common.avatar_data_url(path)}' alt=''><div>{html.escape(player['name'])}</div></div>")
+    target = (winner_index + .5) / max(1, len(tour["players"])) * 100
+    light = f"<span class='r3-hanging-light' style='--target:{target:.3f}%' aria-hidden='true'></span>"
+    st.markdown("<div class='r3-winner-lineup-title'>THE MANSION GUESTS</div><div class='r3-winner-lineup'>" + light + "".join(players) + "</div>", unsafe_allow_html=True)
 
 
 def _podium(tour, winner):

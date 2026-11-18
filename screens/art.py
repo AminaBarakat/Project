@@ -658,11 +658,13 @@ def shackle():
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 120" width="240" height="120">{body}</svg>'
 
 
-def lock_style(key):
+def lock_style(key, digits=4):
     """CSS that turns the container with this key into the padlock's body, with one
     dark display window for the code (like a digital lock). The digits are typed
     straight into that window. Streamlit's own hints ("Press Enter to submit form"
     and the 0/4 counter) are hidden so they can't show through the digits."""
+    if digits < 1:
+        raise ValueError("A lock needs at least one digit window.")
     k = css_key(key)
     c = f".st-key-{k}"
     return f"""<style>
