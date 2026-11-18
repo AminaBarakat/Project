@@ -370,23 +370,40 @@ def picture_button_style(key, svg, height=120, selected=False, bob=False, appear
 
 # --- A countdown the browser animates by itself ---------------------------------------
 
-def countdown(uid, seconds, total, label=""):
+def countdown(uid, seconds, total, label="", urgent=10):
     """A number counting down to 0 and a shrinking bar, animated purely with CSS.
 
     The server draws this once; the browser does the ticking. `uid` must be
-    unique per game so a new game starts a fresh animation."""
+    unique per game so a new game starts a fresh animation.
+
+    In the last `urgent` seconds the pressure goes up, still with CSS only: the
+    number turns red and throbs, the bar turns red, the edges of the screen glow
+    red and the padlock (if there is one) starts to tremble."""
     width = round(100 * seconds / total, 1)
+    late = max(0, seconds - urgent)          # seconds until the pressure starts
+    alarm = "#ff4d6a"
     return f"""<style>
 @property --mm-n {{ syntax: '<integer>'; inherits: false; initial-value: 0; }}
 @keyframes mm-tick-{uid} {{ from {{ --mm-n: {seconds}; }} to {{ --mm-n: 0; }} }}
 @keyframes mm-bar-{uid} {{ from {{ width: {width}%; }} to {{ width: 0%; }} }}
-.mm-n-{uid} {{ --mm-n: {seconds}; animation: mm-tick-{uid} {seconds}s linear forwards;
-              counter-reset: mm-n var(--mm-n); }}
+@keyframes mm-go-red {{ to {{ color: {alarm}; background: {alarm}; }} }}
+@keyframes mm-go-red-text {{ to {{ color: {alarm}; text-shadow: 0 0 14px {alarm}; }} }}
+@keyframes mm-throb {{ 0%,100% {{ transform: scale(1); }} 50% {{ transform: scale(1.22); }} }}
+@keyframes mm-edge {{ 0%,100% {{ opacity: .25; }} 50% {{ opacity: .9; }} }}
+@keyframes mm-tremble {{ 0%,100% {{ transform: rotate(0); }} 25% {{ transform: rotate(-1.6deg) translateX(-2px); }}
+                         75% {{ transform: rotate(1.6deg) translateX(2px); }} }}
+.mm-n-{uid} {{ --mm-n: {seconds}; display: inline-block; counter-reset: mm-n var(--mm-n);
+              animation: mm-tick-{uid} {seconds}s linear forwards, mm-go-red-text .3s {late}s forwards,
+                         mm-throb .8s ease-in-out {late}s infinite; }}
 .mm-n-{uid}::after {{ content: counter(mm-n) "s"; }}
 .mm-bar-{uid} {{ height: 10px; border-radius: 5px; width: {width}%;
                 background: linear-gradient(90deg, {TILE_COLOURS['ice']}, {TILE_COLOURS['purple']});
-                animation: mm-bar-{uid} {seconds}s linear forwards; }}
+                animation: mm-bar-{uid} {seconds}s linear forwards, mm-go-red .3s {late}s forwards; }}
+.mm-edge-{uid} {{ position: fixed; inset: 0; pointer-events: none; z-index: 999; opacity: 0;
+                 box-shadow: inset 0 0 70px 12px {alarm}; animation: mm-edge 1s ease-in-out {late}s infinite; }}
+[class*="st-key-lock_"] {{ animation: mm-tremble .35s linear {late}s infinite; }}
 </style>
+<div class="mm-edge-{uid}"></div>
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
   <span style="color:{SILVER};font-size:.9rem">{label}</span>
   <span style="font-size:1.7rem;font-weight:700;color:{IVORY};display:flex;align-items:center">{icon("timer", 30)}<span class="mm-n-{uid}"></span></span>
@@ -794,3 +811,217 @@ def ready_tap_style(key, picture):
   {b} p {{ font-size:.7rem !important }}
   {b}::after {{ content:"TAP ME";font-size:.6rem;padding:.3rem .1rem }} }}
 </style>"""
+
+
+# --- Round 1 drama: the VS moment, the duel race, stamps and the results reveal --------
+# Player names are typed by players, so every name below goes through html.escape.
+# Pictures are our own avatar images (data URLs), never anything a player sent.
+
+import html as _html_mod
+
+
+def vs_intro(you, opponent):
+    """The fighting-game moment before the duels: the two detectives slide in from
+    opposite sides, a big VS slams down between them with a flash, and the card
+    shakes. you / opponent: (name, picture_url). Plays once when drawn."""
+    (you_name, you_pic), (opp_name, opp_pic) = you, opponent
+    you_name, opp_name = _html_mod.escape(you_name), _html_mod.escape(opp_name)
+    return f"""<style>
+@keyframes mm-in-l {{ 0% {{ transform: translateX(-130%); opacity: 0; }} 65% {{ transform: translateX(6%); opacity: 1; }}
+                      100% {{ transform: none; opacity: 1; }} }}
+@keyframes mm-in-r {{ 0% {{ transform: translateX(130%); opacity: 0; }} 65% {{ transform: translateX(-6%); opacity: 1; }}
+                      100% {{ transform: none; opacity: 1; }} }}
+@keyframes mm-vs-slam {{ 0%, 40% {{ transform: scale(4) rotate(-14deg); opacity: 0; }}
+                         58% {{ transform: scale(.85) rotate(-6deg); opacity: 1; }}
+                         72% {{ transform: scale(1.12) rotate(-6deg); }} 100% {{ transform: scale(1) rotate(-6deg); opacity: 1; }} }}
+@keyframes mm-vs-shake {{ 0%, 56%, 100% {{ transform: none; }} 60% {{ transform: translate(-9px, 5px); }}
+                          64% {{ transform: translate(8px, -6px); }} 68% {{ transform: translate(-5px, 3px); }}
+                          72% {{ transform: translate(3px, -2px); }} }}
+@keyframes mm-vs-flash {{ 0%, 56% {{ opacity: 0; }} 60% {{ opacity: .75; }} 100% {{ opacity: 0; }} }}
+@keyframes mm-vs-glow {{ 0%,100% {{ text-shadow: 0 0 18px {PURPLE}, 0 4px 0 #3b2570; }}
+                         50% {{ text-shadow: 0 0 34px {TILE_COLOURS['ice']}, 0 4px 0 #3b2570; }} }}
+.mm-vs {{ position: relative; overflow: hidden; display: flex; align-items: flex-end; justify-content: space-between;
+         max-width: 620px; margin: .6rem auto 1rem; padding: .8rem 1rem 1rem; border-radius: 20px;
+         border: 2px solid {SILVER}55; box-shadow: 0 0 30px {PURPLE}55;
+         background: linear-gradient(105deg, #5b2c9a 0 49.6%, {SILVER}88 49.6% 50.4%, #1f3a8e 50.4% 100%);
+         animation: mm-vs-shake 1.6s ease-out both; }}
+.mm-vs-side {{ flex: 1 1 0; min-width: 0; text-align: center; position: relative; z-index: 1; }}
+.mm-vs-side img {{ height: 180px; max-width: 100%; object-fit: contain; filter: drop-shadow(0 6px 14px #000a); }}
+.mm-vs-l {{ animation: mm-in-l .75s cubic-bezier(.2,.9,.3,1.15) both; }}
+.mm-vs-r {{ animation: mm-in-r .75s cubic-bezier(.2,.9,.3,1.15) .15s both; }}
+.mm-vs-name {{ display: inline-block; max-width: 100%; margin-top: .3rem; padding: .2rem .7rem; border-radius: 8px;
+              background: #10071fcc; color: {IVORY}; font-weight: 800; font-size: .95rem;
+              white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+.mm-vs-tag {{ display: block; font-size: .62rem; font-weight: 900; letter-spacing: .14em; color: {TILE_COLOURS['ice']}; }}
+.mm-vs-word {{ position: absolute; left: 50%; top: 42%; margin: -2.4rem 0 0 -3rem; width: 6rem; text-align: center; z-index: 2;
+              font-family: Cinzel, Georgia, serif; font-weight: 900; font-size: 4.2rem; line-height: 1; color: {IVORY};
+              animation: mm-vs-slam 1.6s ease-out both, mm-vs-glow 2s ease-in-out 1.6s infinite; }}
+.mm-vs-flash {{ position: absolute; inset: 0; background: #fff; pointer-events: none; z-index: 3; opacity: 0;
+               animation: mm-vs-flash 1.6s ease-out both; }}
+@media (max-width: 560px) {{
+  .mm-vs-side img {{ height: 118px; }} .mm-vs-word {{ font-size: 2.8rem; margin: -1.6rem 0 0 -2rem; width: 4rem; }}
+  .mm-vs-name {{ font-size: .8rem; padding: .15rem .45rem; }} }}
+</style>
+<div class="mm-vs">
+  <div class="mm-vs-side mm-vs-l"><img src="{you_pic}" alt=""/><br><span class="mm-vs-name"><span class="mm-vs-tag">YOU</span>{you_name}</span></div>
+  <div class="mm-vs-word">VS</div>
+  <div class="mm-vs-side mm-vs-r"><img src="{opp_pic}" alt=""/><br><span class="mm-vs-name"><span class="mm-vs-tag">OPPONENT</span>{opp_name}</span></div>
+  <div class="mm-vs-flash"></div>
+</div>"""
+
+
+def duel_race(you, opponent):
+    """A slim live strip above each game: you and your opponent racing through the
+    four games. Shows only how far along each of you is, never right or wrong.
+    you / opponent: dict with name, picture, progress (0-4) and status, where status
+    is "playing", "finished" or "left"."""
+    alarm = "#ff4d6a"
+
+    def lane(who, colour, me):
+        pct = round(100 * min(who["progress"], 4) / 4, 1)
+        name = "You" if me else _html_mod.escape(who["name"])
+        if who["status"] == "left":
+            note = f'<span style="color:{SILVER}99">left the game</span>'
+        elif who["status"] == "finished":
+            note = (f'<span class="mm-race-hot" style="color:{alarm}">finished all 4!</span>' if not me
+                    else f'<span style="color:{TILE_COLOURS["ice"]}">finished!</span>')
+        else:
+            note = f'game {min(int(who["progress"]) + 1, 4)} of 4'
+        return (f'<div class="mm-race-lane">'
+                f'<div class="mm-race-who">{name}</div>'
+                f'<div class="mm-race-track"><div class="mm-race-fill" style="width:{pct}%;background:{colour}"></div>'
+                f'<img class="mm-race-token" src="{who["picture"]}" alt="" style="left:{pct}%;border-color:{colour}"/></div>'
+                f'<div class="mm-race-note">{note}</div></div>')
+
+    return f"""<style>
+@keyframes mm-race-hot {{ 0%,100% {{ opacity: 1; }} 50% {{ opacity: .35; }} }}
+.mm-race {{ background: rgba(29,20,56,.85); border: 1px solid {SILVER}33; border-radius: 12px;
+           padding: .45rem .7rem .5rem; margin: 0 0 .7rem; }}
+.mm-race-lane {{ display: flex; align-items: center; gap: .55rem; height: 30px; }}
+.mm-race-who {{ width: 74px; flex: none; color: {IVORY}; font-weight: 800; font-size: .78rem;
+               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+.mm-race-track {{ position: relative; flex: 1 1 auto; height: 8px; border-radius: 4px; margin-right: 14px;
+                 background: repeating-linear-gradient(90deg, #ffffff22 0 calc(25% - 2px), {SILVER}66 calc(25% - 2px) 25%); }}
+.mm-race-fill {{ height: 100%; border-radius: 4px; transition: width .9s linear; }}
+.mm-race-token {{ position: absolute; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%;
+                 object-fit: cover; object-position: top; background: #291345; border: 2px solid; transition: left .9s linear; }}
+.mm-race-note {{ width: 96px; flex: none; text-align: right; color: {SILVER}; font-size: .72rem; font-weight: 700; white-space: nowrap; }}
+.mm-race-hot {{ animation: mm-race-hot .9s ease-in-out infinite; }}
+@media (max-width: 560px) {{ .mm-race-who {{ width: 52px; font-size: .7rem; }} .mm-race-note {{ width: 74px; font-size: .62rem; }} }}
+</style>
+<div class="mm-race">{lane(you, f"linear-gradient(90deg,{PURPLE},{TILE_COLOURS['ice']})", True)}{lane(opponent, alarm, False)}</div>"""
+
+
+def stamp(text, good=True):
+    """A big rubber stamp that thumps onto the middle of the screen and fades away,
+    e.g. LOCKED IN after an answer or TIME'S UP. Taps go straight through it.
+    `text` is always our own text."""
+    colour = TILE_COLOURS["ice"] if good else "#ff6b7a"
+    return f"""<style>
+@keyframes mm-stamp {{
+  0%   {{ transform: translate(-50%,-50%) rotate(-9deg) scale(2.8); opacity: 0; }}
+  16%  {{ transform: translate(-50%,-50%) rotate(-9deg) scale(.9);  opacity: 1; }}
+  24%  {{ transform: translate(-50%,-50%) rotate(-9deg) scale(1.05); }}
+  30%  {{ transform: translate(-50%,-50%) rotate(-9deg) scale(1); }}
+  75%  {{ transform: translate(-50%,-50%) rotate(-9deg) scale(1); opacity: 1; }}
+  100% {{ transform: translate(-50%,-50%) rotate(-9deg) scale(1); opacity: 0; }} }}
+.mm-stamp {{ position: fixed; top: 42%; left: 50%; z-index: 1000; pointer-events: none; white-space: nowrap;
+            padding: .15em .6em; border: 6px solid {colour}; border-radius: 12px; background: #10071fdd;
+            color: {colour}; font-family: Cinzel, Georgia, serif; font-weight: 900; font-size: clamp(2rem, 9vw, 3.4rem);
+            letter-spacing: .08em; box-shadow: 0 0 40px {colour}88; text-shadow: 0 0 16px {colour};
+            animation: mm-stamp 1.4s ease-out forwards; }}
+</style><div class="mm-stamp">{text}</div>"""
+
+
+REVEAL_FIRST = 0.6        # seconds before the first duel card appears
+REVEAL_STEP = 1.6         # seconds between duel cards (drumroll + reveal)
+REVEAL_DRUMROLL = 1.0     # how long the "?" shows before the winner is revealed
+
+
+def reveal_seconds(duels):
+    """How long the whole results reveal takes for this many duels."""
+    return REVEAL_FIRST + duels * REVEAL_STEP + 0.4
+
+
+def reveal_style():
+    """Styles for the duel-by-duel results reveal (see reveal_card)."""
+    ice, alarm = TILE_COLOURS["ice"], "#ff6b7a"
+    return f"""<style>
+@keyframes mm-rv-in {{ from {{ opacity: 0; transform: translateY(18px) scale(.96); }} to {{ opacity: 1; transform: none; }} }}
+@keyframes mm-rv-q {{ 0%, 88% {{ opacity: 1; visibility: visible; }} 100% {{ opacity: 0; visibility: hidden; }} }}
+@keyframes mm-rv-drum {{ 0%,100% {{ transform: scale(1) rotate(-4deg); }} 50% {{ transform: scale(1.25) rotate(4deg); }} }}
+@keyframes mm-rv-win {{ from {{ box-shadow: none; transform: scale(1); border-color: {SILVER}88; }} 50% {{ transform: scale(1.12); }}
+                        to {{ box-shadow: 0 0 22px {ice}; transform: scale(1); border-color: {ice}; }} }}
+@keyframes mm-rv-lose {{ from {{ filter: none; opacity: 1; }} to {{ filter: grayscale(1) brightness(.7); opacity: .55; }} }}
+@keyframes mm-rv-stamp {{ from {{ opacity: 0; transform: scale(2.6) rotate(-14deg); }} 70% {{ transform: scale(.92) rotate(-7deg); opacity: 1; }}
+                          to {{ opacity: 1; transform: scale(1) rotate(-7deg); }} }}
+.mm-rv-grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; max-width: 640px; margin: 1rem auto 1.2rem; }}
+.mm-rv {{ position: relative; overflow: hidden; border-radius: 16px; padding: .7rem .4rem .8rem;
+         background: rgba(38,16,68,.55); border: 1px solid {SILVER}33;
+         animation: mm-rv-in .5s ease-out var(--d) both; }}
+.mm-rv-mine {{ border: 2px solid {PURPLE}; }}
+.mm-rv-title {{ text-align: center; color: {IVORY}; font-size: .78rem; font-weight: 900; letter-spacing: .12em; margin-bottom: .55rem; }}
+.mm-rv-pair {{ display: flex; align-items: flex-start; justify-content: center; gap: .3rem; }}
+.mm-rv-p {{ flex: 1 1 0; min-width: 0; text-align: center; }}
+.mm-rv-photo {{ width: 74px; height: 74px; margin: 0 auto .3rem; border-radius: 50%; overflow: hidden;
+               border: 3px solid {SILVER}88; background: #291345; }}
+.mm-rv-photo img {{ width: 100%; height: 100%; object-fit: contain; }}
+.mm-rv-name {{ color: {IVORY}; font-weight: 800; font-size: .8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+.mm-rv-vs {{ align-self: center; margin-top: -1.4rem; color: {SILVER}; font-weight: 900; font-size: .8rem; }}
+.mm-rv-stamp {{ display: inline-block; margin-top: .35rem; padding: .1rem .35rem; border-radius: 6px; border: 2px solid;
+               font-family: Cinzel, Georgia, serif; font-size: .62rem; font-weight: 900; letter-spacing: .04em; white-space: nowrap;
+               animation: mm-rv-stamp .45s ease-out calc(var(--d) + {REVEAL_DRUMROLL}s) both; }}
+.mm-rv-win .mm-rv-photo {{ border-color: {ice}; box-shadow: 0 0 22px {ice};
+                          animation: mm-rv-win .5s ease-out calc(var(--d) + {REVEAL_DRUMROLL}s) both; }}
+.mm-rv-win .mm-rv-stamp {{ color: {ice}; border-color: {ice}; }}
+.mm-rv-lose .mm-rv-photo, .mm-rv-lose .mm-rv-name {{ filter: grayscale(1) brightness(.7); opacity: .55;
+                          animation: mm-rv-lose .5s ease-out calc(var(--d) + {REVEAL_DRUMROLL}s) both; }}
+.mm-rv-lose .mm-rv-stamp {{ color: {alarm}; border-color: {alarm}; }}
+.mm-rv-q {{ position: absolute; inset: 2rem 0 0; display: flex; align-items: center; justify-content: center;
+           background: rgba(16,7,31,.92); pointer-events: none; visibility: hidden;
+           animation: mm-rv-q {REVEAL_DRUMROLL}s linear var(--d) both; }}
+.mm-rv-q span {{ font-family: Cinzel, Georgia, serif; font-weight: 900; font-size: 2.6rem; color: {PURPLE};
+                animation: mm-rv-drum .25s ease-in-out infinite; }}
+.mm-rv-static, .mm-rv-static * {{ animation: none !important; }}
+@media (max-width: 560px) {{ .mm-rv-grid {{ gap: .55rem; }} .mm-rv-title {{ font-size: .66rem; letter-spacing: .06em; }}
+  .mm-rv-photo {{ width: 56px; height: 56px; }} .mm-rv-stamp {{ font-size: .44rem; padding: .06rem .16rem; }}
+  .mm-rv-name {{ font-size: .7rem; }} }}
+</style>"""
+
+
+def reveal_card(number, left, right, winner_side, mine, delay=None):
+    """One duel in the results reveal. left / right: (name, picture_url) in the order
+    they were drawn (so the winner's position gives nothing away during the drumroll).
+    winner_side: "left" or "right". delay: seconds until this card starts its
+    animation (may be negative if the reveal is already under way); None = no
+    animation, just the final result."""
+    sides = []
+    for side, (name, picture) in (("left", left), ("right", right)):
+        won = side == winner_side
+        sides.append(f'<div class="mm-rv-p {"mm-rv-win" if won else "mm-rv-lose"}">'
+                     f'<div class="mm-rv-photo"><img src="{picture}" alt=""/></div>'
+                     f'<div class="mm-rv-name">{_html_mod.escape(name)}</div>'
+                     f'<div class="mm-rv-stamp">{"ON THE CASE" if won else "OFF THE CASE"}</div></div>')
+    extra = " mm-rv-mine" if mine else ""
+    if delay is None:
+        extra += " mm-rv-static"
+        drum, style = "", ""
+    else:
+        drum = '<div class="mm-rv-q"><span>?</span></div>'
+        style = f' style="--d:{delay:.2f}s"'
+    title = f"DUEL {number}" + (" · YOUR CASE" if mine else "")
+    return (f'<div class="mm-rv{extra}"{style}><div class="mm-rv-title">{title}</div>'
+            f'<div class="mm-rv-pair">{sides[0]}<div class="mm-rv-vs">VS</div>{sides[1]}</div>{drum}</div>')
+
+
+def after_reveal_style(key, delay):
+    """Keeps the container with this key hidden (and untappable) until the reveal
+    is over, then fades it in. delay <= 0: just show it."""
+    if delay <= 0:
+        return ""
+    return f"""<style>
+@keyframes mm-after {{ from {{ opacity: 0; visibility: hidden; transform: translateY(14px); }}
+                       to {{ opacity: 1; visibility: visible; transform: none; }} }}
+.st-key-{css_key(key)} {{ animation: mm-after .6s ease-out {delay:.2f}s both; }}
+</style>"""
+
