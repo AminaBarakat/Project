@@ -19,7 +19,7 @@ import streamlit as st
 import spectators as sp
 import storage
 import tournament as rules
-from screens import art, avatars, common
+from screens import art, avatars, common, live as shared
 
 ICE, ALARM, GOLD = art.TILE_COLOURS["ice"], "#ff6b7a", "#f7d84a"
 
@@ -190,7 +190,7 @@ def _moment(tour):
 def live(code, me, drawn_for):
     """Crowd bar + reactions popping up at the edge, refreshed every 2 seconds.
     Nothing to tap here. Redraws the whole page when calls open or close."""
-    tour = storage.load(code)
+    tour = shared.peek(code)
     if tour is None:
         return
     if _moment(tour) != drawn_for:
@@ -279,6 +279,7 @@ def panel(code, tour, me):
 def start(code, me):
     """Call this at the top of a Round 2 / Round 3 screen: draws the live part and
     returns the tournament as it was when the page was drawn."""
+    shared.forget()
     tour = storage.load(code)
     if tour is not None:
         live(code, me, _moment(tour))
@@ -295,7 +296,9 @@ def calls_summary(tour, round_name):
     right = sp.who_called_it(tour, round_name)
     if right:
         names = ", ".join(html.escape(_name(tour, pid)) for pid in right)
-        text = f"{names} called it! ({len(right)} of {len(calls)} spectators)"
+        text = f"{names} called it! ({len(right)} of {len(calls)} spectator{'s' if len(calls) != 1 else ''})"
+    elif len(calls) == 1:
+        text = "Nobody saw that coming: the only call was wrong."
     else:
         text = f"Nobody saw that coming: all {len(calls)} spectators called it wrong."
     return STYLE + f'<div class="mm-calls">{crowd_bar(tour, round_name)}{art.banner("solutions", text)}</div>'
