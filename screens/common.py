@@ -67,12 +67,17 @@ def apply_theme():
     [data-baseweb="tab"] { color: #dac9e8 !important; background: rgba(19, 8, 39, .42); border-radius: 10px 10px 0 0; }
     [data-baseweb="tab"][aria-selected="true"] { color: #fff !important; background: rgba(128, 68, 177, .55); }
     hr { border-color: rgba(220, 184, 255, .32) !important; }
+    /* Shared announcements use a luminous glass panel rather than Streamlit gray. */
+    [data-testid="stAlert"] { background: linear-gradient(105deg, rgba(104, 48, 173, .82), rgba(31, 92, 166, .74)) !important;
+      border: 1px solid rgba(177, 234, 255, .72) !important; border-radius: 15px !important;
+      box-shadow: 0 0 24px rgba(172, 92, 255, .30), inset 0 0 28px rgba(170, 224, 255, .10) !important; }
+    [data-testid="stAlert"] * { color: #fcf8ff !important; }
     .mm-wordmark-wrap { margin: .2rem 0 .45rem; text-align: center; overflow: visible; }
     .mm-wordmark { margin-top: .05rem; font-family: Cinzel, Georgia, serif;
       font-size: clamp(1.7rem, 5.6vw, 4.15rem); font-weight: 900; letter-spacing: .045em; line-height: 1.06;
-      text-align: center; text-transform: uppercase; white-space: nowrap; background: linear-gradient(180deg, #ffffff 4%, #f8f9fc 20%, #d9dce5 44%, #ffffff 64%, #c8ccd6 100%);
+      text-align: center; text-transform: uppercase; white-space: nowrap; background: linear-gradient(180deg, #ffffff 2%, #e4bcff 26%, #87f1ff 56%, #dca7ff 82%, #ffffff 100%);
       -webkit-background-clip: text; background-clip: text; color: transparent;
-      -webkit-text-stroke: .35px #f7f8ff; text-shadow: 1px 1px 0 #646b7b, 2px 3px 0 #171123, 0 6px 18px rgba(2, 0, 8, .92); }
+      -webkit-text-stroke: .35px #f7eaff; text-shadow: 0 0 5px rgba(255,255,255,.95), 0 0 18px rgba(205,116,255,.95), 0 0 38px rgba(89,220,255,.68), 2px 3px 0 #271247; }
     .mm-tagline { color: #d7b9ee !important; font-family: Georgia, serif; font-size: 1.1rem; letter-spacing: .08em; text-align: center; }
     .mm-avatar-help { color: #d9c2ec !important; margin: .15rem 0 .65rem; }
     .mm-profile { text-align: center; min-width: 120px; }
