@@ -665,7 +665,7 @@ def settle(tour, now, rng=None):
     elif now >= r1["results_at"] + RESULTS_SECONDS:
         new["status"] = "round2"
         finalists = [result["winner"] for result in r1["results"]]
-        new["round2"] = duo_round.new_round(finalists, now, rng)
+        new["round2"] = duo_round.new_round(finalists, now, rng, show_intro=True)
 
     if new == tour:
         return tour, ""
