@@ -276,7 +276,9 @@ def _mystery(tour, code, me, now):
     with st.container(key=lock_key):
         with st.form(f"r3_{code}_vault_form", border=False):
             vault_code = st.text_input("Enter the vault code", max_chars=3, placeholder="···", key=f"r3_{code}_vault_code")
-            submitted = st.form_submit_button("Unlock and submit theory", type="primary")
+            _, submit_column, _ = st.columns([1, 3, 1])
+            with submit_column:
+                submitted = st.form_submit_button("Unlock and submit theory", type="primary", width="stretch")
     if submitted:
         after, message = storage.update(code, r3.answer, me, suspect, room, object_name, time.time(), vault_code)
         if after is not None and after["status"] == "round3_results":
