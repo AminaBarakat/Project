@@ -11,6 +11,7 @@ import tournament
 from screens import art, common
 
 REFRESH = "2s"
+LOCKED_IN_SECONDS = 5
 
 def show(code, me):
     _live_round(code, me)
@@ -66,7 +67,10 @@ def _live_round(code, me):
     if view["code_solved_at"] is None:
         _code_form(code, me, view["duo_id"])
     else:
-        st.success("Vault code solved. Your teammate sees this progress too.")
+        if 0 <= now - view["code_solved_at"] < LOCKED_IN_SECONDS:
+            _locked_in_banner()
+        else:
+            st.success("Vault code solved. Your teammate sees this progress too.")
         _map(code, me, view)
 
     st.info("The other duo is still in the challenge. First to reach the Rooftop advances.")
@@ -76,8 +80,42 @@ def _feedback_key(code):
     return f"r2_{code}_feedback"
 
 
+def _locked_in_banner():
+    st.markdown("""
+    <style>
+    @keyframes r2-lock-pop {
+      0% { opacity: 0; transform: scale(.78) translateY(8px); }
+      65% { opacity: 1; transform: scale(1.04) translateY(0); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+    .r2-locked-in {
+      animation: r2-lock-pop .48s cubic-bezier(.2,.8,.25,1) both;
+      border: 2px solid #70f5ff; border-radius: 14px; margin: .6rem auto 1rem;
+      max-width: 560px; padding: .85rem 1rem; text-align: center;
+      background: linear-gradient(115deg, rgba(32,14,61,.94), rgba(58,22,91,.94));
+      box-shadow: 0 0 8px #42efff, 0 0 20px rgba(89,224,255,.8),
+                  0 0 34px rgba(192,83,255,.55), inset 0 0 18px rgba(112,245,255,.15);
+      color: #f8f2ff; font-family: ui-sans-serif, system-ui, sans-serif;
+    }
+    .r2-locked-in strong {
+      display: block; color: #eaffff; font-family: Cinzel, Georgia, serif;
+      font-size: clamp(1.25rem, 3.4vw, 1.8rem); letter-spacing: .17em;
+      text-shadow: 0 0 5px #70f5ff, 0 0 14px #32dfff, 0 0 24px #c665ff;
+    }
+    .r2-locked-in span { color: #eadbff; display: block; margin-top: .2rem; }
+    </style>
+    <div class="r2-locked-in" role="status" aria-live="polite">
+      <strong>✦ LOCKED IN ✦</strong>
+      <span>Your vault code has been recorded.</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+
 def _show_feedback(code, message):
     if message.startswith(("Vault unlocked", "Safe choice", "Rooftop reached")):
+        if message.startswith("Vault unlocked"):
+            st.session_state.pop(_feedback_key(code), None)
+            st.rerun(scope="fragment")
         kind = "success"
     elif message.startswith(("Wrong code", "Alarm")):
         kind = "error"
@@ -88,12 +126,29 @@ def _show_feedback(code, message):
 
 
 def _code_form(code, me, duo_id):
+    input_class = art.css_key(f"r2_{code}_vault_code")
+    st.markdown(f"""
+    <style>
+    .r2-vault-entry { margin: .7rem auto .35rem; text-align: center; }
+    .r2-vault-entry-title { color: #f3e6ff; font-family: Cinzel, Georgia, serif;
+      font-size: 1.15rem; font-weight: 800; letter-spacing: .08em;
+      margin-bottom: -.35rem; text-shadow: 0 0 10px rgba(186,115,255,.7); }
+    .st-key-{input_class} { max-width: 440px; margin: 0 auto .8rem; }
+    </style>
+    """, unsafe_allow_html=True)
     with st.form(f"r2_{code}_vault_form", clear_on_submit=False):
-        number = st.number_input("Vault code (exactly 4 digits)", min_value=0, max_value=99999,
-                                 value=None, step=1, format="%d", placeholder="Enter the digits")
-        submitted = st.form_submit_button("Unlock the vault", type="primary")
+        st.markdown(
+            "<div class='r2-vault-entry'><div class='r2-vault-entry-title'>Type the code</div>"
+            + art.img(art.padlock(["?", "?", "?", "?"]), width="220px")
+            + "</div>",
+            unsafe_allow_html=True,
+        )
+        value = st.text_input(
+            "Type the code", max_chars=4, type="password", placeholder="Enter 4 digits",
+            label_visibility="collapsed", key=f"r2_{code}_vault_code",
+        )
+        submitted = st.form_submit_button("Unlock", type="primary")
     if submitted:
-        value = "" if number is None else str(number)
         _, message = storage.update(code, rules.submit_code, me, duo_id, value, time.time())
         _show_feedback(code, message)
 
