@@ -188,11 +188,11 @@ def _code_form(code, me, duo_id):
     input_class = art.css_key(f"r2_{code}_vault_code")
     st.markdown(f"""
     <style>
-    .r2-vault-entry { margin: .7rem auto .35rem; text-align: center; }
-    .r2-vault-entry-title { color: #f3e6ff; font-family: Cinzel, Georgia, serif;
+    .r2-vault-entry {{ margin: .7rem auto .35rem; text-align: center; }}
+    .r2-vault-entry-title {{ color: #f3e6ff; font-family: Cinzel, Georgia, serif;
       font-size: 1.15rem; font-weight: 800; letter-spacing: .08em;
-      margin-bottom: -.35rem; text-shadow: 0 0 10px rgba(186,115,255,.7); }
-    .st-key-{input_class} { max-width: 440px; margin: 0 auto .8rem; }
+      margin-bottom: -.35rem; text-shadow: 0 0 10px rgba(186,115,255,.7); }}
+    .st-key-{input_class} {{ max-width: 440px; margin: 0 auto .8rem; }}
     </style>
     """, unsafe_allow_html=True)
     with st.form(f"r2_{code}_vault_form", clear_on_submit=False):
