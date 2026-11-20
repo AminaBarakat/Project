@@ -279,20 +279,16 @@ def _code_form(code, me, duo_id):
     lock_svg = art.padlock(digits).replace(f'fill="{art.BG}"', 'fill="#000000"')
     st.markdown(f"""
     <style>
-    .r2-vault-entry {{ margin: .7rem auto .35rem; text-align: center; }}
+    .st-key-{shell_class} {{ max-width: 360px; margin: .7rem auto 1rem; text-align: center; }}
+    .r2-vault-entry {{ margin: .7rem auto .1rem; text-align: center; }}
     .r2-vault-entry-title {{ color: #f3e6ff; font-family: Cinzel, Georgia, serif;
       font-size: 1.15rem; font-weight: 800; letter-spacing: .08em;
       margin-bottom: -.35rem; text-shadow: 0 0 10px rgba(186,115,255,.7); }}
-    .st-key-{shell_class} {{ position: relative; }}
-    .st-key-{input_class} {{ position: absolute; z-index: 3; top: 149px; left: 50%;
-      transform: translateX(-50%); width: 158px; max-width: 158px; margin: 0 !important; }}
-    .st-key-{input_class} [data-testid="stTextInputRootElement"],
-    .st-key-{input_class} [data-baseweb="input"] {{ background: transparent !important;
-      border: 0 !important; box-shadow: none !important; min-height: 52px; }}
-    .st-key-{input_class} input {{ background: transparent !important; border: 0 !important;
-      box-shadow: none !important; color: transparent !important; -webkit-text-fill-color: transparent;
-      caret-color: transparent !important; font-family: "Courier New", monospace !important;
-      height: 52px !important; padding: 0 !important; text-align: center !important; }}
+    .st-key-{input_class} {{ max-width: 230px; margin: -.15rem auto .35rem; }}
+    .st-key-{input_class} input {{ font-family: "Courier New", monospace !important; font-size: 1.45rem !important;
+      font-weight: 800 !important; letter-spacing: .35em; text-align: center !important; }}
+    .st-key-{shell_class} div.stButton {{ display: flex; justify-content: center; }}
+    .st-key-{shell_class} div.stButton > button {{ width: auto !important; min-width: 132px; }}
     </style>
     """, unsafe_allow_html=True)
     with st.container(key=shell_key):
@@ -303,7 +299,7 @@ def _code_form(code, me, duo_id):
             unsafe_allow_html=True,
         )
         value = st.text_input(
-            "Enter the four-digit vault code", max_chars=4, type="default", placeholder="",
+            "Enter the four-digit vault code", max_chars=4, type="default", placeholder="e.g. 3583",
             label_visibility="collapsed", key=input_key,
         )
         if st.button("Unlock", type="primary", key=f"r2_{code}_vault_unlock"):
