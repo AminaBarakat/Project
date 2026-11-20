@@ -10,7 +10,7 @@ or database code, which keeps the game rules easy to test.
 import copy
 import random
 
-ROUND_SECONDS = 180
+ROUND_SECONDS = 60
 RESULTS_SECONDS = 15
 MAX_GUESSES = 3
 STORY_CHARACTERS_PER_SECOND = 22
