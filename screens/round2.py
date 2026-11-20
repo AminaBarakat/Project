@@ -62,45 +62,7 @@ def _live_round(code, me):
             st.session_state.pop(_feedback_key(code), None)
 
     st.subheader("Your clue card")
-    st.markdown("""
-    <style>
-    .r2-clue-paper {
-      position: relative; margin: .8rem 0 1rem; padding: 1.45rem 1.35rem;
-      border: 2px solid #9a5c2a; border-radius: 22px 15px 20px 14px;
-      color: #432a17;
-      background:
-        radial-gradient(ellipse at 7% 12%, rgba(108,57,20,.2), transparent 23%),
-        radial-gradient(ellipse at 90% 86%, rgba(108,57,20,.18), transparent 21%),
-        repeating-linear-gradient(0deg, transparent 0 31px, rgba(105,67,33,.055) 32px 33px),
-        linear-gradient(100deg, #d7b274 0%, #f2dfb8 11%, #f7eacb 48%, #edd6a7 88%, #cf9f61 100%);
-      box-shadow: 0 9px 22px rgba(0,0,0,.28), inset 0 0 23px rgba(116,68,26,.28);
-    }
-    .r2-clue-paper::before, .r2-clue-paper::after {
-      content: ""; position: absolute; left: 1rem; right: 1rem; height: 9px;
-      border-radius: 50%; pointer-events: none;
-    }
-    .r2-clue-paper::before {
-      top: -7px; border-top: 3px solid rgba(115,65,27,.72);
-      box-shadow: 0 3px 5px rgba(74,42,18,.24);
-    }
-    .r2-clue-paper::after {
-      bottom: -7px; border-bottom: 3px solid rgba(115,65,27,.58);
-    }
-    .r2-clue-paper-text {
-      font-family: Georgia, 'Times New Roman', serif; font-size: 1.08rem;
-      font-weight: 700; line-height: 1.65; white-space: pre-line;
-      text-shadow: 0 1px rgba(255,248,225,.35);
-    }
-    @media(max-width:560px) {
-      .r2-clue-paper { padding: 1.1rem .95rem; }
-      .r2-clue-paper-text { font-size: 1rem; }
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    st.markdown(
-        f"<div class='r2-clue-paper' role='note'><div class='r2-clue-paper-text'>{html.escape(view['card'])}</div></div>",
-        unsafe_allow_html=True,
-    )
+    _clue_card(code, me, view["card"])
     st.caption("Read your clue aloud to your teammate. Each phone receives only its player's card.")
 
     locked_until = view.get("locked_until")
@@ -181,6 +143,72 @@ def _feedback_key(code):
 
 def _locked_in_key(code):
     return f"r2_{code}_locked_in"
+
+
+def _clue_card(code, me, clue):
+    button_key = art.css_key(f"r2_{code}_{me}_clue_card")
+    revealed_key = f"{button_key}_revealed"
+    st.markdown(f"""
+    <style>
+    .st-key-{button_key} {{ max-width: 520px; margin: .75rem auto 1rem; }}
+    .st-key-{button_key} div.stButton > button {{
+      min-height: 320px; border: 3px solid #9d55ff !important; border-radius: 18px !important;
+      color: #fff !important; font-size: 1.25rem !important; font-weight: 900 !important;
+      letter-spacing: .14em; text-shadow: 0 2px 8px #10071f;
+      background:
+        radial-gradient(ellipse 42% 46% at 50% 50%, #34366f 0 80%, transparent 82%),
+        linear-gradient(135deg, #32164e, #302b69 57%, #172e5b) !important;
+      box-shadow: 0 0 18px rgba(159,85,255,.48), inset 0 0 22px rgba(186,142,255,.2);
+      transition: transform .18s ease, box-shadow .18s ease;
+    }}
+    .st-key-{button_key} div.stButton > button:hover {{
+      border-color: #c9a6ff !important; transform: translateY(-3px);
+      box-shadow: 0 0 28px rgba(159,85,255,.72), inset 0 0 24px rgba(186,142,255,.27);
+    }}
+    .st-key-{button_key} div.stButton > button p {{ color: #fff !important; }}
+    .r2-card-scene {{ height: 320px; max-width: 520px; margin: .75rem auto 1rem; perspective: 1100px; }}
+    .r2-clue-card {{ height: 100%; position: relative; transform-style: preserve-3d;
+      animation: r2-card-flip .78s cubic-bezier(.2,.8,.25,1) both; }}
+    @keyframes r2-card-flip {{ from {{ transform: rotateY(0deg); }} to {{ transform: rotateY(180deg); }} }}
+    .r2-card-face {{ position: absolute; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; padding: 1.4rem; text-align: center;
+      border: 3px solid #9d55ff; border-radius: 18px; backface-visibility: hidden;
+      -webkit-backface-visibility: hidden; box-shadow: 0 0 22px rgba(159,85,255,.48),
+      inset 0 0 24px rgba(186,142,255,.18); }}
+    .r2-card-back {{ color: #fff; font-size: 1.25rem; font-weight: 900; letter-spacing: .14em;
+      background: radial-gradient(ellipse 42% 46% at 50% 50%, #34366f 0 80%, transparent 82%),
+      linear-gradient(135deg, #32164e, #302b69 57%, #172e5b); }}
+    .r2-card-front {{ transform: rotateY(180deg); color: #fbf7ff;
+      background: linear-gradient(145deg, #432274 0%, #34265f 52%, #173c70 100%); }}
+    .r2-card-front-label {{ color: #d8bdff; font-size: .78rem; font-weight: 900;
+      letter-spacing: .18em; margin-bottom: .8rem; text-transform: uppercase; }}
+    .r2-card-front-clue {{ font-size: clamp(1rem,2.5vw,1.3rem); font-weight: 700;
+      line-height: 1.55; margin: 0; white-space: pre-line; }}
+    @media(max-width:560px) {{
+      .st-key-{button_key} div.stButton > button {{ min-height: 270px; }}
+      .r2-card-scene {{ height: 270px; }}
+      .r2-card-face {{ padding: 1rem; }}
+    }}
+    @media(prefers-reduced-motion:reduce) {{ .r2-clue-card {{ animation-duration: .01ms; }} }}
+    </style>
+    """, unsafe_allow_html=True)
+
+    if not st.session_state.get(revealed_key, False):
+        if st.button("Tap here", key=button_key, width="stretch"):
+            st.session_state[revealed_key] = True
+            st.rerun(scope="fragment")
+        return
+
+    st.markdown(
+        "<div class='r2-card-scene' role='group' aria-label='Your revealed clue'>"
+        "<div class='r2-clue-card'>"
+        "<div class='r2-card-face r2-card-back'>Tap here</div>"
+        "<div class='r2-card-face r2-card-front'>"
+        "<div class='r2-card-front-label'>Your clue</div>"
+        f"<p class='r2-card-front-clue'>{html.escape(clue)}</p>"
+        "</div></div></div>",
+        unsafe_allow_html=True,
+    )
 
 
 def _show_feedback(code, message):
