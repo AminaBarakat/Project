@@ -32,6 +32,18 @@ STYLE = """<style>
 .st-key-mm_mode_on_host .st-key-mm_mode_host div.stButton > button p,
 .st-key-mm_mode_on_join .st-key-mm_mode_join div.stButton > button p { color: #fff !important; }
 
+/* The 5 | 8 players switch on "Host a game": same pill look, a bit smaller. */
+.st-key-mm_size { width: 100%; padding: 3px; border-radius: 999px; background: #0c0518; border: 1px solid rgba(255,255,255,.14); }
+.st-key-mm_size [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 0 !important; }
+.st-key-mm_size [data-testid="stColumn"] { min-width: 0 !important; width: auto !important; flex: 1 1 0 !important; }
+.st-key-mm_size div.stButton > button { border-radius: 999px !important; min-height: 2.2rem; border: none !important;
+  background: transparent !important; box-shadow: none !important; }
+.st-key-mm_size div.stButton > button p { color: #e4e7efaa !important; font-weight: 700 !important; white-space: nowrap; }
+.st-key-mm_size_on_5 .st-key-mm_size_5 div.stButton > button, .st-key-mm_size_on_8 .st-key-mm_size_8 div.stButton > button {
+  background: linear-gradient(90deg, #8b4fe0, #b57bff) !important; box-shadow: 0 4px 14px rgba(181,123,255,.35) !important; }
+.st-key-mm_size_on_5 .st-key-mm_size_5 div.stButton > button p, .st-key-mm_size_on_8 .st-key-mm_size_8 div.stButton > button p {
+  color: #fff !important; }
+
 /* The glass card holding the form. */
 .st-key-mm_home_card { width: 100%; max-width: 560px; margin: 0 auto; padding: 1.1rem 1.1rem .9rem; border-radius: 20px;
   background: linear-gradient(160deg, rgba(42,20,80,.93), rgba(23,11,47,.93)); border: 1px solid rgba(255,255,255,.12);
@@ -82,13 +94,30 @@ def show():
             _join_form()
 
 
+def _table_size():
+    """The host's choice: 8 players (Round 1 in duels) or 5 (everyone together)."""
+    size = st.session_state.setdefault("mm_table_size", rules.MAX_PLAYERS)
+    st.markdown("<div class='mm-label'>How many players?</div>", unsafe_allow_html=True)
+    with st.container(key=f"mm_size_on_{size}"):
+        with st.container(key="mm_size"):
+            for column, option in zip(st.columns(2), (5, 8)):
+                with column:
+                    if st.button(f"{option} players", key=f"mm_size_{option}", width="stretch") and size != option:
+                        st.session_state["mm_table_size"] = option
+                        st.rerun()
+    st.caption("5 players: everyone plays Round 1 together and the weakest is out (quicker, great for a demo). "
+               if size == 5 else "8 players: Round 1 is four 1-v-1 duels.")
+    return size
+
+
 def show_create():
+    size = _table_size()
     appearance = common.avatar_picker("create_avatar")
     name = st.text_input("Your name", key="create_name", max_chars=rules.MAX_NAME_LENGTH, placeholder="e.g. Marta")
     submitted = st.button("Create tournament", type="primary", key="create_tournament", width="stretch")
-    st.caption(f"You'll be the host and one of the {rules.MAX_PLAYERS} players.")
+    st.caption(f"You'll be the host and one of the {size} players.")
     if submitted:
-        tour, host_id, message = storage.create(name, appearance=appearance)
+        tour, host_id, message = storage.create(name, appearance=appearance, size=size)
         if tour is None:
             st.error(message)
         else:

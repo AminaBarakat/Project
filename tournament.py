@@ -31,6 +31,7 @@ import round1
 import round3
 
 MAX_PLAYERS = 8
+TABLE_SIZES = (5, 8)        # 8: four Round 1 duels. 5: one free-for-all, the weakest is out.
 MAX_NAME_LENGTH = 20
 
 
@@ -46,14 +47,18 @@ def clean_name(name):
     return name, None
 
 
-def new_tournament(code, host_id, host_name, appearance=None):
+def new_tournament(code, host_id, host_name, appearance=None, size=MAX_PLAYERS):
     """Creates a lobby with the host as its first player. Returns (tournament, message);
-    the tournament is None if the host's name is refused."""
+    the tournament is None if the host's name (or the table size) is refused.
+    size: 8 players (Round 1 in duels) or 5 players (Round 1 all together)."""
     name, problem = clean_name(host_name)
     if problem:
         return None, problem
+    if size not in TABLE_SIZES:
+        return None, "A game is for 5 or 8 players."
     tournament = {
         "code": code,
+        "size": size,
         "status": "lobby",
         "host_id": host_id,
         "players": [{"id": host_id, "name": name, "appearance": appearance}],
@@ -64,6 +69,11 @@ def new_tournament(code, host_id, host_name, appearance=None):
         "round3": None,
     }
     return tournament, f"Tournament {code} created. Share the code with your friends!"
+
+
+def table_size(tournament):
+    """How many players this game is for (5 or 8). Older games had no size: 8."""
+    return tournament.get("size", MAX_PLAYERS)
 
 
 def find_player(tournament, player_id):
@@ -84,8 +94,8 @@ def join(tournament, player_id, name, appearance=None):
         return tournament, "This tournament has already started."
     if find_player(tournament, player_id):
         return tournament, "You're already in this tournament."
-    if len(tournament["players"]) >= MAX_PLAYERS:
-        return tournament, f"This tournament is full ({MAX_PLAYERS} players)."
+    if len(tournament["players"]) >= table_size(tournament):
+        return tournament, f"This tournament is full ({table_size(tournament)} players)."
     name, problem = clean_name(name)
     if problem:
         return tournament, problem
@@ -131,7 +141,8 @@ def remove_player(tournament, by_id, player_id):
 
 
 def start(tournament, by_id, rng=None, now=None):
-    """The host starts the tournament: players are shuffled into random 1 v 1 duels.
+    """The host starts the tournament. With 8 players they are shuffled into random
+    1 v 1 duels; with 5 they all play Round 1 together (one group).
 
     rng is a random.Random. The tests pass one with a fixed seed so the draw is
     predictable; the app leaves it out and gets a truly random draw.
@@ -141,18 +152,24 @@ def start(tournament, by_id, rng=None, now=None):
     if tournament["status"] != "lobby":
         return tournament, "The tournament has already started."
     count = len(tournament["players"])
-    if count != MAX_PLAYERS:
-        return tournament, f"You need exactly {MAX_PLAYERS} players to start ({count} so far)."
+    size = table_size(tournament)
+    if count != size:
+        return tournament, f"You need exactly {size} players to start ({count} so far)."
 
     rng = rng or random.Random()
     ids = [p["id"] for p in tournament["players"]]
     rng.shuffle(ids)
 
     new = copy.deepcopy(tournament)
-    new["duels"] = [[ids[i], ids[i + 1]] for i in range(0, len(ids), 2)]
+    if size == MAX_PLAYERS:
+        new["duels"] = [[ids[i], ids[i + 1]] for i in range(0, len(ids), 2)]
+        message = "The duels are set. Let the games begin!"
+    else:
+        new["duels"] = [ids]                  # one group: everyone against everyone
+        message = "Everyone against everyone. Let the games begin!"
     new["status"] = "round1"
     new["round1"] = round1.new_round(new["duels"], time.time() if now is None else now, rng)
-    return new, "The duels are set. Let the games begin!"
+    return new, message
 
 
 def duel_of(tournament, player_id):
@@ -164,9 +181,10 @@ def duel_of(tournament, player_id):
 
 
 def opponent_of(tournament, player_id):
-    """The player dict this player faces in Round 1, or None."""
+    """The player dict this player faces in Round 1, or None (also with 5 players,
+    where there is no single opponent)."""
     duel = duel_of(tournament, player_id)
-    if not duel:
+    if not duel or len(duel) != 2:
         return None
     other = duel[1] if duel[0] == player_id else duel[0]
     return find_player(tournament, other)
