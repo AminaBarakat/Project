@@ -27,9 +27,13 @@ def show(code, me):
     tour = spectate.start(code, me)
     round2_state = (tour or {}).get("round2") or {}
     intro_ends_at = round2_state.get("intro_ends_at")
+    challenge_started_at = round2_state.get(
+        "challenge_started_at", round2_state.get("started_at")
+    )
     intro_active = bool(
         tour and tour.get("status") == "round2"
-        and (intro_ends_at is None or time.time() < intro_ends_at)
+        and (challenge_started_at is None
+             or (intro_ends_at is not None and time.time() < intro_ends_at))
     )
     _live_round(code, me)
     if not intro_active:
@@ -47,9 +51,15 @@ def _live_round(code, me):
         st.rerun(scope="app")
 
     view = rules.player_view(tour, me)
-    intro_ends_at = tour["round2"].get("intro_ends_at")
-    if tour["status"] == "round2" and intro_ends_at is not None and now < intro_ends_at:
-        _round2_intro(tour, me, intro_ends_at, now)
+    round_state = tour["round2"]
+    intro_ends_at = round_state.get("intro_ends_at")
+    challenge_started_at = round_state.get(
+        "challenge_started_at", round_state.get("started_at")
+    )
+    waiting_for_start = challenge_started_at is None and intro_ends_at is None
+    legacy_intro_playing = intro_ends_at is not None and now < intro_ends_at
+    if tour["status"] == "round2" and (waiting_for_start or legacy_intro_playing):
+        _round2_intro(code, tour, me, intro_ends_at, now, waiting_for_start)
         return
     if tour["status"] == "final":
         _end_screen(code, tour, me, view)
@@ -98,7 +108,7 @@ def _live_round(code, me):
     st.info("The other duo is still in the challenge. First to reach the Rooftop advances.")
 
 
-def _round2_intro(tour, me, intro_ends_at, now):
+def _round2_intro(code, tour, me, intro_ends_at, now, waiting_for_start):
     st.markdown(art.heading("duel", "Round 2: Duo Vault Challenge", size=44, level=1),
                 unsafe_allow_html=True)
     st.markdown("### Two duos. One vault. Who reaches the rooftop first?")
@@ -149,6 +159,20 @@ def _round2_intro(tour, me, intro_ends_at, now):
         unsafe_allow_html=True,
     )
     st.caption("Round 1's four winners have been paired into two teams. Combine your clues to open the vault.")
+    if waiting_for_start:
+        player_is_finalist = me in tour["round2"].get("players", {})
+        if player_is_finalist and me not in tour.get("eliminated", []):
+            st.markdown("<p class='r2-intro-start'>The shared one-minute clock starts when a finalist begins.</p>",
+                        unsafe_allow_html=True)
+            if st.button("Start Round 2", type="primary", key=f"r2_{code}_start_challenge"):
+                _, message = storage.update(code, rules.start_challenge, me, time.time())
+                if message == "Round 2 challenge started.":
+                    st.rerun(scope="app")
+                st.warning(message)
+        else:
+            st.markdown("<p class='r2-intro-start'>The challenge begins when a finalist is ready.</p>",
+                        unsafe_allow_html=True)
+        return
     seconds = max(1, math.ceil(intro_ends_at - now))
     st.markdown(f"<p class='r2-intro-start'>The challenge begins in {seconds}…</p>", unsafe_allow_html=True)
 
@@ -252,6 +276,7 @@ def _code_form(code, me, duo_id):
     typed = str(st.session_state.get(input_key, ""))[:4]
     digits = [character if character in "0123456789" else "?" for character in typed]
     digits.extend(["?"] * (4 - len(digits)))
+    lock_svg = art.padlock(digits).replace(f'fill="{art.BG}"', 'fill="#000000"')
     st.markdown(f"""
     <style>
     .r2-vault-entry {{ margin: .7rem auto .35rem; text-align: center; }}
@@ -273,7 +298,7 @@ def _code_form(code, me, duo_id):
     with st.container(key=shell_key):
         st.markdown(
             "<div class='r2-vault-entry'><div class='r2-vault-entry-title'>Type the code</div>"
-            + art.img(art.padlock(digits), width="220px")
+            + art.img(lock_svg, width="220px")
             + "</div>",
             unsafe_allow_html=True,
         )
