@@ -329,15 +329,22 @@ def _route_progress(route_step):
     stops = []
     for index, room in enumerate(route):
         state = "visited" if index < current_step else "current" if index == current_step else "upcoming"
+        revealed = index <= current_step
         marker = (
             "<span class='r2-route-marker'>You're here"
             "<span aria-hidden='true'>&#8595;</span></span>"
             if index == current_step else ""
         )
+        if revealed:
+            room_content = f"<img src='{_room_image_uri(room)}' alt=''/>"
+            room_label = html.escape(room)
+        else:
+            room_content = "<span class='r2-route-hidden' aria-hidden='true'>?</span>"
+            room_label = "Undiscovered"
         stops.append(
             f"<div class='r2-route-stop r2-route-{state}'>{marker}"
-            f"<div class='r2-route-node'><img src='{_room_image_uri(room)}' alt=''/></div>"
-            f"<span class='r2-route-label'>{html.escape(room)}</span></div>"
+            f"<div class='r2-route-node'>{room_content}</div>"
+            f"<span class='r2-route-label'>{room_label}</span></div>"
         )
     return f"""
     <style>
@@ -357,6 +364,8 @@ def _route_progress(route_step):
       box-shadow:0 0 12px rgba(157,116,255,.54),inset 0 0 15px rgba(201,174,255,.2); }}
     .r2-route-node img {{ width:84%; height:84%; object-fit:contain;
       filter:drop-shadow(0 0 9px rgba(194,157,255,.95)) saturate(1.12); }}
+    .r2-route-hidden {{ color:#c9b4e9; font-size:2.5rem; font-weight:900;
+      text-shadow:0 0 12px rgba(173,126,255,.75); }}
     .r2-route-label {{ margin-top:.5rem; color:#eee7ff; font-size:.9rem; font-weight:900;
       text-shadow:0 0 8px rgba(187,143,255,.7); }}
     .r2-route-visited {{ opacity:1; }}
@@ -366,6 +375,9 @@ def _route_progress(route_step):
     .r2-route-current .r2-route-node {{ border-color:#a4edff;
       box-shadow:0 0 9px #9aeaff,0 0 24px rgba(166,112,255,.95),inset 0 0 18px rgba(201,174,255,.25); }}
     .r2-route-current .r2-route-label {{ color:#fff; text-shadow:0 0 10px #a879ff; }}
+    .r2-route-upcoming {{ opacity:.48; }}
+    .r2-route-upcoming .r2-route-node {{ border-style:dashed; box-shadow:inset 0 0 12px rgba(201,174,255,.12); }}
+    .r2-route-upcoming .r2-route-label {{ color:#b7a9ca; text-shadow:none; }}
     .r2-route-marker {{ position:absolute; top:-2.2rem; display:flex; flex-direction:column; align-items:center;
       color:#fff; font-size:.83rem; font-weight:900; white-space:nowrap;
       text-shadow:0 0 9px #bc8aff,0 0 18px rgba(164,115,255,.9); }}
@@ -380,7 +392,7 @@ def _route_progress(route_step):
       .r2-route-marker > span {{ font-size:1.35rem; }}
     }}
     </style>
-    <div class='r2-route-progress' aria-label='Vault to Gallery to Rooftop route'>
+    <div class='r2-route-progress' aria-label='Round 2 route progress'>
       <div class='r2-route-line' aria-hidden='true'><span style='clip-path:inset(0 {100 - progress}% 0 0)'></span></div>
       {''.join(stops)}
     </div>
