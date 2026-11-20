@@ -27,9 +27,13 @@ def show(code, me):
     tour = spectate.start(code, me)
     round2_state = (tour or {}).get("round2") or {}
     intro_ends_at = round2_state.get("intro_ends_at")
+    challenge_started_at = round2_state.get(
+        "challenge_started_at", round2_state.get("started_at")
+    )
     intro_active = bool(
         tour and tour.get("status") == "round2"
-        and (intro_ends_at is None or time.time() < intro_ends_at)
+        and (challenge_started_at is None
+             or (intro_ends_at is not None and time.time() < intro_ends_at))
     )
     _live_round(code, me)
     if not intro_active:
@@ -47,9 +51,15 @@ def _live_round(code, me):
         st.rerun(scope="app")
 
     view = rules.player_view(tour, me)
-    intro_ends_at = tour["round2"].get("intro_ends_at")
-    if tour["status"] == "round2" and intro_ends_at is not None and now < intro_ends_at:
-        _round2_intro(tour, me, intro_ends_at, now)
+    round_state = tour["round2"]
+    intro_ends_at = round_state.get("intro_ends_at")
+    challenge_started_at = round_state.get(
+        "challenge_started_at", round_state.get("started_at")
+    )
+    waiting_for_start = challenge_started_at is None and intro_ends_at is None
+    legacy_intro_playing = intro_ends_at is not None and now < intro_ends_at
+    if tour["status"] == "round2" and (waiting_for_start or legacy_intro_playing):
+        _round2_intro(code, tour, me, intro_ends_at, now, waiting_for_start)
         return
     if tour["status"] == "final":
         _end_screen(code, tour, me, view)
@@ -98,7 +108,7 @@ def _live_round(code, me):
     st.info("The other duo is still in the challenge. First to reach the Rooftop advances.")
 
 
-def _round2_intro(tour, me, intro_ends_at, now):
+def _round2_intro(code, tour, me, intro_ends_at, now, waiting_for_start):
     st.markdown(art.heading("duel", "Round 2: Duo Vault Challenge", size=44, level=1),
                 unsafe_allow_html=True)
     st.markdown("### Two duos. One vault. Who reaches the rooftop first?")
@@ -149,6 +159,20 @@ def _round2_intro(tour, me, intro_ends_at, now):
         unsafe_allow_html=True,
     )
     st.caption("Round 1's four winners have been paired into two teams. Combine your clues to open the vault.")
+    if waiting_for_start:
+        player_is_finalist = me in tour["round2"].get("players", {})
+        if player_is_finalist and me not in tour.get("eliminated", []):
+            st.markdown("<p class='r2-intro-start'>The shared one-minute clock starts when a finalist begins.</p>",
+                        unsafe_allow_html=True)
+            if st.button("Start Round 2", type="primary", key=f"r2_{code}_start_challenge"):
+                _, message = storage.update(code, rules.start_challenge, me, time.time())
+                if message == "Round 2 challenge started.":
+                    st.rerun(scope="app")
+                st.warning(message)
+        else:
+            st.markdown("<p class='r2-intro-start'>The challenge begins when a finalist is ready.</p>",
+                        unsafe_allow_html=True)
+        return
     seconds = max(1, math.ceil(intro_ends_at - now))
     st.markdown(f"<p class='r2-intro-start'>The challenge begins in {seconds}…</p>", unsafe_allow_html=True)
 
@@ -252,6 +276,7 @@ def _code_form(code, me, duo_id):
     typed = str(st.session_state.get(input_key, ""))[:4]
     digits = [character if character in "0123456789" else "?" for character in typed]
     digits.extend(["?"] * (4 - len(digits)))
+    lock_svg = art.padlock(digits).replace(f'fill="{art.BG}"', 'fill="#000000"')
     st.markdown(f"""
     <style>
     .r2-vault-entry {{ margin: .7rem auto .35rem; text-align: center; }}
@@ -273,7 +298,7 @@ def _code_form(code, me, duo_id):
     with st.container(key=shell_key):
         st.markdown(
             "<div class='r2-vault-entry'><div class='r2-vault-entry-title'>Type the code</div>"
-            + art.img(art.padlock(digits), width="220px")
+            + art.img(lock_svg, width="220px")
             + "</div>",
             unsafe_allow_html=True,
         )
@@ -317,45 +342,46 @@ def _route_progress(route_step):
     return f"""
     <style>
     .r2-route-progress {{ position:relative; display:grid; grid-template-columns:repeat(3,minmax(0,1fr));
-      align-items:start; max-width:940px; margin:1.1rem auto 1.25rem; padding-top:2.4rem; }}
-    .r2-route-line {{ position:absolute; z-index:0; left:16.666%; top:92px; width:66.668%; height:5px;
-      border-radius:99px; background:rgba(207,190,255,.2); box-shadow:0 0 10px rgba(151,112,255,.28); }}
-    .r2-route-line > span {{ display:block; height:100%; border-radius:inherit;
-      background:linear-gradient(90deg,#a56aff,#bd91ff 55%,#87e8ff);
-      box-shadow:0 0 12px rgba(180,119,255,.9); transition:width .35s ease; }}
+      align-items:start; max-width:1020px; margin:1.1rem auto 1.25rem; padding-top:2.6rem; }}
+    .r2-route-line {{ position:absolute; z-index:0; left:16.666%; top:87px; width:66.668%; height:5px;
+      border-radius:99px; background:repeating-linear-gradient(90deg,rgba(197,161,255,.58) 0 9px,transparent 9px 16px);
+      filter:drop-shadow(0 0 5px rgba(173,126,255,.7)); }}
+    .r2-route-line > span {{ position:absolute; inset:0; border-radius:inherit;
+      background:repeating-linear-gradient(90deg,#c69aff 0 9px,transparent 9px 16px);
+      filter:drop-shadow(0 0 7px #ad74ff); transition:clip-path .35s ease; }}
     .r2-route-stop {{ position:relative; z-index:1; display:flex; min-width:0; flex-direction:column;
-      align-items:center; opacity:.58; transition:opacity .25s ease; }}
-    .r2-route-node {{ display:grid; width:108px; height:108px; place-items:center; overflow:hidden;
-      border:2px solid rgba(218,211,255,.78); border-radius:50%;
-      background:radial-gradient(circle at 50% 42%,rgba(106,86,192,.68),rgba(35,22,63,.98) 74%);
-      box-shadow:0 0 13px rgba(157,116,255,.4),inset 0 0 15px rgba(201,174,255,.18); }}
-    .r2-route-node img {{ width:82%; height:82%; object-fit:contain;
-      filter:drop-shadow(0 0 8px rgba(198,159,255,.78)); }}
-    .r2-route-label {{ margin-top:.55rem; color:#eee7ff; font-size:.95rem; font-weight:900;
-      text-shadow:0 0 8px rgba(187,143,255,.54); }}
-    .r2-route-visited {{ opacity:.9; }}
-    .r2-route-visited .r2-route-node {{ border-color:#bfa0ff;
-      box-shadow:0 0 17px rgba(166,112,255,.72),inset 0 0 15px rgba(201,174,255,.2); }}
+      align-items:center; opacity:.76; transition:opacity .25s ease; }}
+    .r2-route-node {{ display:grid; width:90px; height:90px; place-items:center; overflow:hidden;
+      border:2px solid rgba(225,218,255,.9); border-radius:13px;
+      background:radial-gradient(circle at 50% 42%,rgba(91,78,169,.9),rgba(28,21,58,.98) 76%);
+      box-shadow:0 0 12px rgba(157,116,255,.54),inset 0 0 15px rgba(201,174,255,.2); }}
+    .r2-route-node img {{ width:84%; height:84%; object-fit:contain;
+      filter:drop-shadow(0 0 9px rgba(194,157,255,.95)) saturate(1.12); }}
+    .r2-route-label {{ margin-top:.5rem; color:#eee7ff; font-size:.9rem; font-weight:900;
+      text-shadow:0 0 8px rgba(187,143,255,.7); }}
+    .r2-route-visited {{ opacity:1; }}
+    .r2-route-visited .r2-route-node {{ border-color:#c59fff;
+      box-shadow:0 0 16px rgba(166,112,255,.82),inset 0 0 15px rgba(201,174,255,.24); }}
     .r2-route-current {{ opacity:1; }}
     .r2-route-current .r2-route-node {{ border-color:#a4edff;
       box-shadow:0 0 9px #9aeaff,0 0 24px rgba(166,112,255,.95),inset 0 0 18px rgba(201,174,255,.25); }}
     .r2-route-current .r2-route-label {{ color:#fff; text-shadow:0 0 10px #a879ff; }}
-    .r2-route-marker {{ position:absolute; top:-2.25rem; display:flex; flex-direction:column; align-items:center;
+    .r2-route-marker {{ position:absolute; top:-2.2rem; display:flex; flex-direction:column; align-items:center;
       color:#fff; font-size:.83rem; font-weight:900; white-space:nowrap;
       text-shadow:0 0 9px #bc8aff,0 0 18px rgba(164,115,255,.9); }}
     .r2-route-marker > span {{ color:#a9ecff; font-size:1.65rem; line-height:.9;
       text-shadow:0 0 10px #a9ecff; }}
     @media(max-width:560px) {{
       .r2-route-progress {{ padding-top:2rem; margin:.9rem auto 1rem; }}
-      .r2-route-line {{ top:66px; height:4px; }}
-      .r2-route-node {{ width:64px; height:64px; }}
+      .r2-route-line {{ top:64px; height:4px; }}
+      .r2-route-node {{ width:64px; height:64px; border-radius:10px; }}
       .r2-route-label {{ margin-top:.4rem; font-size:.76rem; }}
-      .r2-route-marker {{ top:-1.75rem; font-size:.67rem; }}
+      .r2-route-marker {{ top:-1.85rem; font-size:.67rem; }}
       .r2-route-marker > span {{ font-size:1.35rem; }}
     }}
     </style>
     <div class='r2-route-progress' aria-label='Vault to Gallery to Rooftop route'>
-      <div class='r2-route-line' aria-hidden='true'><span style='width:{progress}%'></span></div>
+      <div class='r2-route-line' aria-hidden='true'><span style='clip-path:inset(0 {100 - progress}% 0 0)'></span></div>
       {''.join(stops)}
     </div>
     """

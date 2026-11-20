@@ -15,7 +15,7 @@ ROUTE_CHOICES = {
 WRONG_DOORS = {"Vault": "Cellar", "Gallery": "Kitchen"}
 LOCKOUT_SECONDS = 10
 ROUND_SECONDS = 60
-INTRO_SECONDS = 5
+INTRO_SECONDS = 5  # Retained for older saved rounds with a timed introduction.
 
 
 def new_round(player_ids, now, rng=None, show_intro=False):
@@ -51,8 +51,10 @@ def new_round(player_ids, now, rng=None, show_intro=False):
         "decided_by": None,
     }
     if show_intro:
-        round_state["intro_ends_at"] = now + INTRO_SECONDS
-        round_state["challenge_started_at"] = round_state["intro_ends_at"]
+        # Keep the matchup page visible until a finalist starts the challenge.
+        # The challenge clock begins from that shared server-side action.
+        round_state["intro_ends_at"] = None
+        round_state["challenge_started_at"] = None
     return round_state
 
 
@@ -82,9 +84,13 @@ def _validate_action(tour, player_id, duo_id, now):
     duo = round_state.get("duos", {}).get(duo_id)
     if not duo:
         return None, None, "That duo doesn't exist."
-    if now < round_state.get("intro_ends_at", round_state["started_at"]):
+    challenge_started_at = _challenge_started_at(round_state)
+    if challenge_started_at is None:
+        return None, None, "The Round 2 challenge hasn't started yet."
+    intro_ends_at = round_state.get("intro_ends_at")
+    if intro_ends_at is not None and now < intro_ends_at:
         return None, None, "The Round 2 introduction is still playing."
-    if now >= _challenge_started_at(round_state) + ROUND_SECONDS:
+    if now >= challenge_started_at + ROUND_SECONDS:
         return None, None, "Time is up. The result is being settled."
     if duo.get("finished_at") is not None:
         return None, None, "Your duo has already finished."
@@ -147,19 +153,36 @@ def choose_door(tour, player_id, duo_id, destination, now, rng=None):
 
 
 def prepare_round(tour, now, rng=None):
-    """Start the shared Round 2 introduction when the first device opens this screen.
-
-    This keeps the ready/start transition in Round 1 independent of the intro UI,
-    while persisting one server-clock deadline for every device to display.
-    """
+    """Migrate older Round 2 states and settle any expired challenge."""
     round_state = tour.get("round2")
-    if tour.get("status") == "round2" and round_state and round_state.get("intro_ends_at") is None:
+    if (tour.get("status") == "round2" and round_state
+            and "challenge_started_at" not in round_state):
         new = copy.deepcopy(tour)
-        intro_ends_at = round_state.get("started_at", now) + INTRO_SECONDS
+        intro_ends_at = round_state.get("intro_ends_at")
+        if intro_ends_at is None:
+            intro_ends_at = round_state.get("started_at", now) + INTRO_SECONDS
         new["round2"]["intro_ends_at"] = intro_ends_at
         new["round2"]["challenge_started_at"] = intro_ends_at
         tour = new
     return settle(tour, now, rng)
+
+
+def start_challenge(tour, player_id, now):
+    """Let a Round 2 finalist start the shared challenge and its server timer."""
+    round_state = tour.get("round2") or {}
+    if tour.get("status") != "round2":
+        return tour, "Round 2 is not active."
+    if player_id in tour.get("eliminated", []):
+        return tour, "You were eliminated and can't start Round 2."
+    if player_id not in round_state.get("players", {}):
+        return tour, "You're not playing in Round 2."
+    if _challenge_started_at(round_state) is not None:
+        return tour, "The Round 2 challenge has already started."
+
+    new = copy.deepcopy(tour)
+    new["round2"]["intro_ends_at"] = now
+    new["round2"]["challenge_started_at"] = now
+    return new, "Round 2 challenge started."
 
 
 def settle(tour, now, rng=None):
@@ -167,7 +190,8 @@ def settle(tour, now, rng=None):
     round_state = tour.get("round2")
     if tour.get("status") != "round2" or not round_state:
         return tour, ""
-    if now < _challenge_started_at(round_state) + ROUND_SECONDS:
+    challenge_started_at = _challenge_started_at(round_state)
+    if challenge_started_at is None or now < challenge_started_at + ROUND_SECONDS:
         return tour, ""
 
     solved = [duo_id for duo_id, duo in round_state["duos"].items()
@@ -222,6 +246,7 @@ def player_view(tour, player_id):
     duo = round_state["duos"][duo_id]
     teammate_id = next(pid for pid in duo["players"] if pid != player_id)
     teammate = next((p for p in tour.get("players", []) if p["id"] == teammate_id), None)
+    challenge_started_at = _challenge_started_at(round_state)
     view.update({
         "duo_id": duo_id,
         "card": CARD_A if assignment["card"] == "A" else CARD_B,
@@ -231,8 +256,9 @@ def player_view(tour, player_id):
         "alarm_count": duo["alarm_count"],
         "locked_until": duo["locked_until"],
         "finished_at": duo["finished_at"],
-        "started_at": _challenge_started_at(round_state),
-        "ends_at": _challenge_started_at(round_state) + ROUND_SECONDS,
+        "started_at": challenge_started_at,
+        "ends_at": (challenge_started_at + ROUND_SECONDS
+                    if challenge_started_at is not None else None),
         "advanced": round_state["winner"] == duo_id,
     })
     return view
