@@ -82,7 +82,7 @@ def _redraw_at(when, text):
 def _deadlines(tour, me, now):
     """The moments when this player's screen must change by itself."""
     started = tour["round1"]["players"][me]["game_started_at"]
-    moments = [started + r1.GAME_SECONDS]
+    moments = [started + r1.time_limit(r1.current_game(tour, me))]
     if r1.current_game(tour, me) == "memory" and now < started + r1.MEMORY_SHOW_SECONDS:
         moments.append(started + r1.MEMORY_SHOW_SECONDS)
     return moments
@@ -97,11 +97,14 @@ def _live_strip(code, me, moments):
     if time.time() >= min(moments):
         st.rerun()
     tour = live.peek(code)
-    opponent = rules.opponent_of(tour, me) if tour else None
-    if opponent is None:
+    if tour is None or me not in tour["round1"]["players"]:
         return
     now = time.time()
-    _html(art.duel_race(_racer(tour, me, now), _racer(tour, opponent["id"], now)))
+    # Your rivals: your opponent, or with 5 players everyone else in the group.
+    group = tour["duels"][r1.duel_index(tour, me)]
+    rivals = [_racer(tour, pid, now) for pid in group if pid != me]
+    if rivals:
+        _html(art.duel_race(_racer(tour, me, now), *rivals))
 
 
 def _racer(tour, pid, now):
@@ -140,10 +143,11 @@ def _game_header(tour, me, now):
     doesn't redraw anything every second (that is what made taps get lost)."""
     number = r1.game_number(tour, me)
     started = tour["round1"]["players"][me]["game_started_at"]
-    seconds = max(0, int(started + r1.GAME_SECONDS - now + 0.999))
+    limit = r1.time_limit(r1.current_game(tour, me))         # each game has its own short timer
+    seconds = max(0, int(started + limit - now + 0.999))
     dots = "".join("●" if k < number else ("◉" if k == number else "○") for k in range(len(r1.GAMES)))
-    _html(art.countdown(f"g{number}_{int(started)}", seconds, r1.GAME_SECONDS,
-                        f"Game {number + 1} of {len(r1.GAMES)} &nbsp; {dots}"))
+    _html(art.countdown(f"g{number}_{int(started)}", seconds, limit,
+                        f"Game {number + 1} of {len(r1.GAMES)} &nbsp; {dots}", urgent=min(10, limit // 3)))
 
 
 # Rule for this file: anything a player taps or types into is drawn as part of the
@@ -206,18 +210,28 @@ def _picture_button(key, svg, label, height=120, selected=False, bob=False, appe
 # --- intro ------------------------------------------------------------------------
 
 def _intro(tour, me):
-    _html(art.heading("duel", "Round 1: the duels", size=44, level=1))
-    opponent = rules.opponent_of(tour, me)
     you = rules.find_player(tour, me)
-    st.markdown("### Your first suspect is… your opponent.")
-    _html(art.vs_intro((you["name"], _picture(you, 360)), (opponent["name"], _picture(opponent, 360))))
+    if r1.is_free_for_all(tour):
+        _html(art.heading("duel", "Round 1: everyone against everyone", size=40, level=1))
+        group = tour["duels"][r1.duel_index(tour, me)]
+        _html(art.ffa_intro([(p["name"], _picture(p, 240), p["id"] == me)
+                             for p in (rules.find_player(tour, pid) for pid in group)]))
+    else:
+        _html(art.heading("duel", "Round 1: the duels", size=44, level=1))
+        opponent = rules.opponent_of(tour, me)
+        st.markdown("### Your first suspect is… your opponent.")
+        _html(art.vs_intro((you["name"], _picture(you, 360)), (opponent["name"], _picture(opponent, 360))))
     order = r1.order_of(tour, me)
     _html("<p><b>Your four games:</b> " + " &nbsp;→&nbsp; ".join(
-        f"{art.icon(g, 22)}{r1.GAMES[g]}" for g in order) + "</p>")
-    st.caption(f"{r1.GAME_SECONDS} seconds and one try per game. Most right answers wins; "
-               "on a draw, the faster one wins.")
-    st.divider()
-    duels.show_bracket(tour, me)
+        f"{art.icon(g, 22)}{r1.GAMES[g]} <small>({r1.time_limit(g)}s)</small>" for g in order) + "</p>")
+    if r1.is_free_for_all(tour):
+        st.caption("Think fast: one try per game, each with its own short timer. "
+                   "The detective with the fewest right answers (then the slowest) is out.")
+    else:
+        st.caption("Think fast: one try per game, each with its own short timer. Most right answers wins; "
+                   "on a draw, the faster one wins.")
+        st.divider()
+        duels.show_bracket(tour, me)
 
 
 # --- the games --------------------------------------------------------------------
@@ -275,7 +289,7 @@ def _number_lock(code, me, number, puzzle):
           + art.img(art.shackle(), width="150px").replace("margin:auto", "margin:0 auto -4px") + "</div>")
     with st.container(key=lock_key):
         with st.form(_key(code, f"lock_form_{number}"), border=False):
-            typed = st.text_input("Type the code", max_chars=4, placeholder="····",
+            typed = st.text_input("Type the code", max_chars=3, placeholder="···",
                                   key=_key(code, f"typed_{number}"))
             unlock = st.form_submit_button("Unlock", type="primary")
     if unlock:
@@ -362,10 +376,17 @@ def _memory(tour, code, me, number, now, puzzle):
 # --- tie-breaker -----------------------------------------------------------------
 
 def _tiebreak(tour, code, me, now):
-    opponent = rules.opponent_of(tour, me)
     _html(art.heading("tiebreak", "It's a tie!", size=44, level=1))
-    st.markdown(f"Neither you nor {common.player_label(opponent)} got a game right. "
-                "One question decides it. If you're both right, the faster one wins.")
+    if r1.is_free_for_all(tour):
+        i = r1.duel_index(tour, me)
+        others = [rules.find_player(tour, pid) for pid in tour["round1"]["tiebreaks"][str(i)]["players"] if pid != me]
+        names = " and ".join(common.player_label(p) for p in others)
+        st.markdown(f"You and {names} are tied for last place. One question decides who stays: "
+                    "a wrong answer goes out first, then the slowest.")
+    else:
+        opponent = rules.opponent_of(tour, me)
+        st.markdown(f"Neither you nor {common.player_label(opponent)} got a game right. "
+                    "One question decides it. If you're both right, the faster one wins.")
     seconds = r1.tiebreak_seconds_left(tour, me, now)
     _html(art.countdown(f"tb_{r1.duel_index(tour, me)}", seconds, r1.TIEBREAK_SECONDS, "One question decides it"))
     _html(art.panel("rules", "The question", [r1.TIEBREAK_QUESTION]))
@@ -468,7 +489,15 @@ def _results(code, tour, me):
     total = art.reveal_seconds(len(tour["duels"]))
     animate = elapsed < total
     cards = []
-    for i, ((a, b), result) in enumerate(zip(tour["duels"], tour["round1"]["results"])):
+    if r1.is_free_for_all(tour):
+        # 5 players: one card with the whole group; the one who is out gets the stamp.
+        result = tour["round1"]["results"][0]
+        group = [rules.find_player(tour, pid) for pid in tour["duels"][0]]
+        delay = art.REVEAL_FIRST - elapsed if animate else None
+        cards.append(art.group_reveal_card([(p["name"], _picture(p), p["id"] == result["loser"], p["id"] == me)
+                                            for p in group], delay))
+    for i, ((a, b), result) in enumerate(zip(tour["duels"], tour["round1"]["results"])
+                                         if not r1.is_free_for_all(tour) else []):
         left, right = rules.find_player(tour, a), rules.find_player(tour, b)
         delay = art.REVEAL_FIRST + i * art.REVEAL_STEP - elapsed if animate else None
         cards.append(art.reveal_card(i + 1, (left["name"], _picture(left)), (right["name"], _picture(right)),

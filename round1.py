@@ -33,10 +33,17 @@ import random
 import round2 as duo_round
 
 INTRO_SECONDS = 8           # long enough for the VS moment and a look at your four games
-GAME_SECONDS = 60
-TIEBREAK_SECONDS = 30
+# Round 1 is about thinking AND reacting fast, so every game has its own short timer.
+GAME_TIMES = {
+    "pattern": 15,            # one tap
+    "memory": 25,             # 5 s to look + 20 s to pick the three missing objects
+    "number_lock": 30,        # three digits, three clues
+    "escape_route": 40,       # three or four doors
+}
+GAME_SECONDS = max(GAME_TIMES.values())   # the longest game (kept for older code and tests)
+TIEBREAK_SECONDS = 15
 RESULTS_SECONDS = 10        # (no longer used to move on: Round 2 starts when everyone is ready)
-MEMORY_SHOW_SECONDS = 7      # the memory items are shown for the first 7 s of that game
+MEMORY_SHOW_SECONDS = 5      # the memory items are shown for the first 5 s of that game
 
 # --- the four games -------------------------------------------------------------
 # Each game has a bank of 5 versions. When the host starts, one version of
@@ -44,10 +51,11 @@ MEMORY_SHOW_SECONDS = 7      # the memory items are shown for the first 7 s of t
 # tournament (both players in a duel always get the same one). Every version has
 # exactly one answer; tests/test_round1.py proves that by trying every possibility.
 
-NUMBER_LOCK_RULE = "The code has 4 digits, all different."
+NUMBER_LOCK_RULE = "The code has 3 digits, all different."
 
 _FEEDBACK_TEXT = {
     (1, 1): "One digit is right and in the right place; one is right but in the wrong place",
+    (2, 0): "Two digits are right and in the right place",
     (1, 0): "One digit is right and in the right place",
     (0, 1): "One digit is right but in the wrong place",
     (0, 2): "Two digits are right, but both are in the wrong place",
@@ -58,9 +66,7 @@ _FEEDBACK_TEXT = {
 ESCAPE_CLUES = [
     "Never enter a room with food in it.",
     "Never enter a room where something ticks or chimes.",
-    "The guard never leaves the piano.",
-    "From the room with the fireplace, the Exit is exactly three doors away.",
-    "Read every door carefully: the house only tells you once.",
+    "Keep away from the guard at the piano.",
 ]
 
 MEMORY_ITEMS = ["Key", "Compass", "Rose", "Coin", "Feather",
@@ -69,16 +75,16 @@ MEMORY_DECOYS = ["Ring", "Teacup", "Spectacles", "Dice", "Umbrella", "Envelope"]
 
 PUZZLES = {
     "number_lock": [
-        {"answer": "6205",
-         "feedback": {"4865": (1, 1), "0423": (0, 2), "5874": (0, 1), "6753": (1, 1), "2731": (0, 1)}},
-        {"answer": "7489",
-         "feedback": {"5278": (0, 2), "7145": (1, 1), "9536": (0, 1), "3167": (0, 1), "8394": (0, 3)}},
-        {"answer": "3519",
-         "feedback": {"3475": (1, 1), "0862": (0, 0), "7580": (1, 0), "6093": (0, 2), "6410": (1, 0)}},
-        {"answer": "3974",
-         "feedback": {"2691": (0, 1), "7459": (0, 3), "6150": (0, 0), "4359": (0, 3), "9047": (0, 3)}},
-        {"answer": "6473",
-         "feedback": {"4315": (0, 2), "1075": (1, 0), "3489": (1, 1), "9186": (0, 1), "5103": (1, 0)}},
+        {"answer": "714",
+         "feedback": {"792": (1, 0), "597": (0, 1), "814": (2, 0)}},
+        {"answer": "382",
+         "feedback": {"508": (0, 1), "532": (1, 1), "728": (0, 2)}},
+        {"answer": "905",
+         "feedback": {"739": (0, 1), "695": (1, 1), "510": (0, 2)}},
+        {"answer": "268",
+         "feedback": {"068": (2, 0), "920": (0, 1), "768": (2, 0)}},
+        {"answer": "473",
+         "feedback": {"257": (0, 1), "467": (1, 1), "735": (0, 2)}},
     ],
     # A 4 × 4 wall: every row and every column has each shape once and each colour once.
     # None is the gap.
@@ -126,174 +132,108 @@ PUZZLES = {
     ],
     # The same house rules every time, but the doors and what they say change.
     # "hidden" spells out what the descriptions reveal (the tests use it).
+    # Short houses: 3 or 4 doors from Start to the Exit. "hidden" says which rooms break
+    # a house rule; tests/test_round1.py proves exactly one route breaks none.
     "escape_route": [
-        {"map": {
-            "Start": ["Hall", "Kitchen", "Conservatory"],
-            "Hall": ["Library", "Music Room", "Gallery"],
-            "Kitchen": ["Pantry", "Gallery"],
-            "Conservatory": ["Chapel", "Library"],
-            "Library": ["Billiard Room", "Clock Room", "Chapel"],
-            "Music Room": ["Study"],
-            "Gallery": ["Study", "Ballroom"],
-            "Chapel": ["Study", "Greenhouse"],
-            "Billiard Room": ["Study", "Storage Room"],
-            "Clock Room": ["Study"],
-            "Study": ["Exit", "Wine Cellar"],
-            "Ballroom": ["Exit"]},
-         "rooms": {
-            "Hall": "Tall windows over the garden.",
-            "Kitchen": "It smells of fresh bread.",
-            "Conservatory": "Breakfast is laid out among the palms.",
-            "Library": "A fire crackles in the hearth.",
-            "Music Room": "A grand piano… and heavy footsteps.",
-            "Gallery": "Old portraits watch you pass.",
-            "Pantry": "Shelves full of jam jars.",
-            "Chapel": "A bell chimes every quarter hour.",
-            "Billiard Room": "Green felt and silence.",
-            "Clock Room": "Dozens of clocks on every wall.",
-            "Greenhouse": "Glass walls, no other door.",
-            "Study": "A desk covered in maps.",
-            "Storage Room": "Dusty boxes, no other door.",
-            "Ballroom": "A grandfather clock stands in the corner.",
-            "Wine Cellar": "Bottles, cheese and a locked gate.",
-            "Exit": "Fresh night air!"},
-         "hidden": {"food": {"Kitchen", "Conservatory", "Pantry", "Wine Cellar"},
-                    "ticks": {"Clock Room", "Ballroom", "Chapel"},
-                    "guard": {"Music Room"}, "fireplace": {"Library"}},
-         "answer": ["Hall", "Library", "Billiard Room", "Study", "Exit"]},
-        {"map": {
-            "Start": ["Gallery", "Hall", "Kitchen"],
-            "Gallery": ["Study", "Chapel", "Music Room"],
-            "Hall": ["Library", "Pantry"],
-            "Kitchen": ["Library", "Storage Room"],
-            "Study": ["Billiard Room", "Clock Room"],
-            "Chapel": ["Billiard Room", "Greenhouse"],
-            "Music Room": ["Ballroom"],
-            "Library": ["Ballroom", "Study"],
-            "Billiard Room": ["Exit", "Wine Cellar"],
-            "Clock Room": ["Exit"],
-            "Ballroom": ["Exit"]},
-         "rooms": {
-            "Gallery": "Portraits glow above a crackling fireplace.",
-            "Hall": "A clock ticks somewhere on the landing.",
-            "Kitchen": "Soup bubbles on the stove.",
-            "Study": "A desk covered in maps.",
-            "Chapel": "A bell chimes every quarter hour.",
-            "Music Room": "A grand piano… and heavy footsteps.",
-            "Library": "Books from floor to ceiling, all quiet.",
-            "Pantry": "Shelves full of jam jars.",
-            "Storage Room": "Dusty boxes, no other door.",
-            "Billiard Room": "Green felt and silence.",
-            "Clock Room": "Dozens of clocks on every wall.",
-            "Greenhouse": "Glass walls, no other door.",
-            "Ballroom": "A banquet is laid out for a party.",
-            "Wine Cellar": "Bottles, cheese and a locked gate.",
-            "Exit": "Fresh night air!"},
-         "hidden": {"food": {"Kitchen", "Pantry", "Wine Cellar", "Ballroom"},
-                    "ticks": {"Clock Room", "Chapel", "Hall"},
-                    "guard": {"Music Room"}, "fireplace": {"Gallery"}},
-         "answer": ["Gallery", "Study", "Billiard Room", "Exit"]},
-        {"map": {
-            "Start": ["Conservatory", "Library", "Hall"],
-            "Conservatory": ["Greenhouse", "Gallery"],
-            "Library": ["Gallery", "Clock Room", "Kitchen"],
-            "Hall": ["Music Room", "Chapel"],
-            "Gallery": ["Billiard Room", "Pantry"],
-            "Clock Room": ["Billiard Room"],
-            "Kitchen": ["Study"],
-            "Music Room": ["Study"],
-            "Chapel": ["Study", "Storage Room"],
-            "Billiard Room": ["Study", "Wine Cellar"],
-            "Study": ["Exit", "Ballroom"],
-            "Ballroom": ["Exit"]},
-         "rooms": {
-            "Conservatory": "Palm trees under the glass, perfectly still.",
-            "Library": "A clock ticks above the shelves.",
-            "Hall": "Tall windows over the garden.",
-            "Greenhouse": "Glass walls, no other door.",
-            "Gallery": "Portraits glow above a crackling fireplace.",
-            "Clock Room": "Dozens of clocks on every wall.",
-            "Kitchen": "It smells of fresh bread.",
-            "Music Room": "A grand piano… and heavy footsteps.",
-            "Chapel": "A bell chimes every quarter hour.",
-            "Pantry": "Shelves full of jam jars.",
-            "Billiard Room": "Green felt and silence.",
-            "Storage Room": "Dusty boxes, no other door.",
-            "Study": "A desk covered in maps.",
-            "Wine Cellar": "Bottles, cheese and a locked gate.",
-            "Ballroom": "A grandfather clock stands in the corner.",
-            "Exit": "Fresh night air!"},
-         "hidden": {"food": {"Kitchen", "Pantry", "Wine Cellar"},
-                    "ticks": {"Clock Room", "Library", "Ballroom", "Chapel"},
-                    "guard": {"Music Room"}, "fireplace": {"Gallery"}},
-         "answer": ["Conservatory", "Gallery", "Billiard Room", "Study", "Exit"]},
-        {"map": {
-            "Start": ["Kitchen", "Library", "Gallery"],
-            "Kitchen": ["Pantry", "Hall"],
-            "Library": ["Hall", "Study", "Chapel"],
-            "Gallery": ["Music Room", "Conservatory"],
-            "Hall": ["Billiard Room", "Clock Room"],
-            "Study": ["Billiard Room", "Storage Room"],
-            "Chapel": ["Greenhouse", "Exit"],
-            "Music Room": ["Ballroom"],
-            "Conservatory": ["Study", "Greenhouse"],
-            "Billiard Room": ["Exit", "Wine Cellar"],
-            "Clock Room": ["Exit"],
-            "Ballroom": ["Exit"]},
-         "rooms": {
-            "Kitchen": "Soup bubbles on the stove.",
-            "Library": "A fire crackles in the hearth.",
-            "Gallery": "Old portraits watch you pass.",
-            "Pantry": "Shelves full of jam jars.",
-            "Hall": "A clock ticks somewhere on the landing.",
-            "Study": "A desk covered in maps.",
-            "Chapel": "A bell chimes every quarter hour.",
-            "Music Room": "A grand piano… and heavy footsteps.",
-            "Conservatory": "Breakfast is laid out among the palms.",
-            "Billiard Room": "Green felt and silence.",
-            "Clock Room": "Dozens of clocks on every wall.",
-            "Storage Room": "Dusty boxes, no other door.",
-            "Greenhouse": "Glass walls, no other door.",
-            "Ballroom": "A grandfather clock stands in the corner.",
-            "Wine Cellar": "Bottles, cheese and a locked gate.",
-            "Exit": "Fresh night air!"},
-         "hidden": {"food": {"Kitchen", "Pantry", "Wine Cellar", "Conservatory"},
-                    "ticks": {"Clock Room", "Chapel", "Ballroom", "Hall"},
-                    "guard": {"Music Room"}, "fireplace": {"Library"}},
-         "answer": ["Library", "Study", "Billiard Room", "Exit"]},
-        {"map": {
-            "Start": ["Conservatory", "Hall", "Music Room"],
-            "Conservatory": ["Gallery", "Greenhouse"],
-            "Hall": ["Gallery", "Kitchen", "Study"],
-            "Music Room": ["Library"],
-            "Gallery": ["Library", "Clock Room"],
-            "Kitchen": ["Pantry"],
-            "Study": ["Chapel", "Billiard Room"],
-            "Library": ["Billiard Room", "Ballroom"],
-            "Clock Room": ["Billiard Room"],
-            "Chapel": ["Exit"],
-            "Billiard Room": ["Exit", "Storage Room"],
-            "Ballroom": ["Exit"]},
-         "rooms": {
-            "Conservatory": "Palm trees under the glass, perfectly still.",
-            "Hall": "Afternoon tea and cakes are served here.",
-            "Music Room": "A grand piano… and heavy footsteps.",
-            "Gallery": "Portraits glow above a crackling fireplace.",
-            "Greenhouse": "Glass walls, no other door.",
-            "Kitchen": "It smells of fresh bread.",
-            "Study": "A desk covered in maps.",
-            "Library": "Books from floor to ceiling, all quiet.",
-            "Clock Room": "Dozens of clocks on every wall.",
-            "Pantry": "Shelves full of jam jars.",
-            "Chapel": "A bell chimes every quarter hour.",
-            "Billiard Room": "Green felt and silence.",
-            "Ballroom": "A banquet is laid out for a party.",
-            "Storage Room": "Dusty boxes, no other door.",
-            "Exit": "Fresh night air!"},
-         "hidden": {"food": {"Kitchen", "Pantry", "Ballroom", "Hall"},
-                    "ticks": {"Clock Room", "Chapel"},
-                    "guard": {"Music Room"}, "fireplace": {"Gallery"}},
-         "answer": ["Conservatory", "Gallery", "Library", "Billiard Room", "Exit"]},
+        {"map": {"Start": ["Gallery", "Hall", "Kitchen"],
+                 "Gallery": ["Study", "Music Room"],
+                 "Hall": ["Library", "Clock Room"],
+                 "Kitchen": ["Pantry", "Library"],
+                 "Study": ["Exit", "Storage Room"],
+                 "Music Room": ["Exit"],
+                 "Library": ["Exit", "Billiard Room"],
+                 "Billiard Room": ["Exit"],
+                 "Clock Room": ["Exit"]},
+         "rooms": {"Gallery": "Portraits glow above a crackling fireplace.",
+                   "Hall": "A clock ticks somewhere on the landing.",
+                   "Kitchen": "Soup bubbles on the stove.",
+                   "Study": "A desk covered in maps.",
+                   "Music Room": "A grand piano… and heavy footsteps.",
+                   "Library": "Books from floor to ceiling, all quiet.",
+                   "Billiard Room": "Green felt and silence.",
+                   "Clock Room": "Dozens of clocks on every wall.",
+                   "Pantry": "Shelves full of jam jars.",
+                   "Storage Room": "Dusty boxes, no other door.",
+                   "Exit": "Fresh night air!"},
+         "hidden": {"food": set(["Kitchen", "Pantry"]), "ticks": set(["Clock Room", "Hall"]), "guard": set(["Music Room"])},
+         "answer": ["Gallery", "Study", "Exit"]},
+        {"map": {"Start": ["Hall", "Conservatory", "Chapel"],
+                 "Hall": ["Library", "Kitchen"],
+                 "Conservatory": ["Billiard Room", "Ballroom"],
+                 "Chapel": ["Study"],
+                 "Library": ["Billiard Room", "Clock Room"],
+                 "Kitchen": ["Exit"],
+                 "Billiard Room": ["Exit", "Wine Cellar"],
+                 "Ballroom": ["Exit"],
+                 "Study": ["Exit"],
+                 "Clock Room": ["Exit"]},
+         "rooms": {"Hall": "Coats on hooks, not a sound.",
+                   "Conservatory": "Breakfast is served among the ferns.",
+                   "Chapel": "A bell chimes every quarter hour.",
+                   "Library": "Books from floor to ceiling, all quiet.",
+                   "Kitchen": "Bread is baking in the oven.",
+                   "Billiard Room": "Green felt and silence.",
+                   "Ballroom": "A banquet is laid out for a party.",
+                   "Study": "A desk covered in maps.",
+                   "Clock Room": "Dozens of clocks on every wall.",
+                   "Wine Cellar": "Bottles, cheese and a locked gate.",
+                   "Exit": "Fresh night air!"},
+         "hidden": {"food": set(["Ballroom", "Conservatory", "Kitchen", "Wine Cellar"]), "ticks": set(["Chapel", "Clock Room"]), "guard": set([])},
+         "answer": ["Hall", "Library", "Billiard Room", "Exit"]},
+        {"map": {"Start": ["Library", "Music Room", "Pantry"],
+                 "Library": ["Gallery", "Clock Room"],
+                 "Music Room": ["Gallery", "Exit"],
+                 "Pantry": ["Exit"],
+                 "Gallery": ["Exit", "Greenhouse"],
+                 "Clock Room": ["Exit"]},
+         "rooms": {"Library": "Books from floor to ceiling, all quiet.",
+                   "Music Room": "A grand piano… and heavy footsteps.",
+                   "Pantry": "Shelves full of jam jars.",
+                   "Gallery": "Portraits glow above a crackling fireplace.",
+                   "Clock Room": "Dozens of clocks on every wall.",
+                   "Greenhouse": "Glass walls, no other door.",
+                   "Exit": "Fresh night air!"},
+         "hidden": {"food": set(["Pantry"]), "ticks": set(["Clock Room"]), "guard": set(["Music Room"])},
+         "answer": ["Library", "Gallery", "Exit"]},
+        {"map": {"Start": ["Conservatory", "Kitchen", "Hall"],
+                 "Conservatory": ["Study", "Ballroom"],
+                 "Kitchen": ["Study", "Pantry"],
+                 "Hall": ["Billiard Room"],
+                 "Study": ["Billiard Room", "Chapel"],
+                 "Ballroom": ["Exit"],
+                 "Billiard Room": ["Exit", "Storage Room"],
+                 "Chapel": ["Exit"]},
+         "rooms": {"Conservatory": "Ferns and orchids, nothing to eat.",
+                   "Kitchen": "Soup bubbles on the stove.",
+                   "Hall": "A clock ticks somewhere on the landing.",
+                   "Study": "A desk covered in maps.",
+                   "Ballroom": "A banquet is laid out for a party.",
+                   "Billiard Room": "Green felt and silence.",
+                   "Chapel": "A bell chimes every quarter hour.",
+                   "Pantry": "Shelves full of jam jars.",
+                   "Storage Room": "Dusty boxes, no other door.",
+                   "Exit": "Fresh night air!"},
+         "hidden": {"food": set(["Ballroom", "Kitchen", "Pantry"]), "ticks": set(["Chapel", "Hall"]), "guard": set([])},
+         "answer": ["Conservatory", "Study", "Billiard Room", "Exit"]},
+        {"map": {"Start": ["Study", "Wine Cellar", "Clock Room"],
+                 "Study": ["Gallery", "Music Room"],
+                 "Wine Cellar": ["Gallery"],
+                 "Clock Room": ["Library"],
+                 "Gallery": ["Library", "Kitchen"],
+                 "Music Room": ["Exit"],
+                 "Library": ["Exit", "Storage Room"],
+                 "Kitchen": ["Exit"]},
+         "rooms": {"Study": "A desk covered in maps.",
+                   "Wine Cellar": "Bottles, cheese and a locked gate.",
+                   "Clock Room": "Dozens of clocks on every wall.",
+                   "Gallery": "Portraits glow above a crackling fireplace.",
+                   "Music Room": "A grand piano… and heavy footsteps.",
+                   "Library": "Books from floor to ceiling, all quiet.",
+                   "Kitchen": "Bread is baking in the oven.",
+                   "Storage Room": "Dusty boxes, no other door.",
+                   "Exit": "Fresh night air!"},
+         "hidden": {"food": set(["Kitchen", "Wine Cellar"]), "ticks": set(["Clock Room"]), "guard": set(["Music Room"])},
+         "answer": ["Study", "Gallery", "Library", "Exit"]},
     ],
     "memory": [
         # "options" are the 10 objects players pick from: the 3 that vanished, 3 that
@@ -339,7 +279,7 @@ def check(game, value, puzzle):
     (wrong format: doesn't use the try)?"""
     if game == "number_lock":
         code = value.strip() if isinstance(value, str) else ""
-        if len(code) != 4 or not code.isdigit() or len(set(code)) != 4:
+        if len(code) != 3 or not code.isdigit() or len(set(code)) != 3:
             return "invalid"
         return "right" if code == puzzle["answer"] else "wrong"
 
@@ -405,6 +345,21 @@ def new_round(duels, now, rng=None):
 
 # --- what a player can see ---------------------------------------------------
 
+def time_limit(game):
+    """Seconds a player gets for this game."""
+    return GAME_TIMES[game]
+
+
+def _limit_of(tour, player_id, index):
+    """Time limit of this player's game number `index` (0-3)."""
+    return GAME_TIMES[order_of(tour, player_id)[index]]
+
+
+def is_free_for_all(tour):
+    """True in the 5-player game: everyone plays Round 1 together (one group, not
+    duels), and only the weakest result is out."""
+    return any(len(group) > 2 for group in tour.get("duels", []))
+
 def duel_index(tour, player_id):
     for i, duel in enumerate(tour["duels"]):
         if player_id in duel:
@@ -451,7 +406,8 @@ def phase(tour, player_id, now):
         return "intro"
     i = duel_index(tour, player_id)
     tiebreak = r1["tiebreaks"].get(str(i))
-    if tiebreak and r1["results"][i] is None and player_id not in tiebreak["answers"]:
+    if (tiebreak and r1["results"][i] is None and player_id in _tiebreak_players(tour, i)
+            and player_id not in tiebreak["answers"]):
         return "tiebreak"
     if not is_done(tour, player_id):
         return "playing"
@@ -470,8 +426,10 @@ def _ceil(x):
 
 def seconds_left(tour, player_id, now):
     """Seconds left on this player's current game."""
+    if is_done(tour, player_id):
+        return 0
     started = tour["round1"]["players"][player_id]["game_started_at"]
-    return _ceil(started + GAME_SECONDS - now)
+    return _ceil(started + _limit_of(tour, player_id, game_number(tour, player_id)) - now)
 
 
 def intro_seconds_left(tour, now):
@@ -501,7 +459,7 @@ def progress(tour, player_id, now):
     if done >= len(GAMES):
         return float(len(GAMES))
     started = tour["round1"]["players"][player_id]["game_started_at"]
-    into_game = max(0.0, min(0.95, (now - started) / GAME_SECONDS))
+    into_game = max(0.0, min(0.95, (now - started) / _limit_of(tour, player_id, done)))
     return done + into_game
 
 
@@ -515,7 +473,7 @@ def points(tour, player_id):
 
 
 def total_seconds(tour, player_id):
-    """Time spent on all finished games (a game that ran out counts as the full 60 s)."""
+    """Time spent on all finished games (a game that ran out counts as its full time)."""
     return round(sum(r["seconds"] for r in tour["round1"]["players"][player_id]["results"]), 1)
 
 
@@ -559,7 +517,7 @@ def answer(tour, player_id, number, value, now):
 
 def _format_hint(game):
     return {
-        "number_lock": "The code is 4 different digits.",
+        "number_lock": "The code is 3 different digits.",
         "pattern": "Pick one of the four tiles.",
         "escape_route": "Keep going until you reach the end of a path.",
         "memory": "Pick exactly three items.",
@@ -572,7 +530,8 @@ def answer_tiebreak(tour, player_id, value, now, rng=None):
         return tour, "There's no tie-breaker right now."
     i = duel_index(tour, player_id)
     tiebreak = tour["round1"]["tiebreaks"].get(str(i))
-    if not tiebreak or tour["round1"]["results"][i] is not None:
+    if (not tiebreak or tour["round1"]["results"][i] is not None
+            or player_id not in _tiebreak_players(tour, i)):
         return tour, "There's no tie-breaker for you."
     if player_id in tiebreak["answers"]:
         return tour, "You've already answered."
@@ -590,10 +549,11 @@ def answer_tiebreak(tour, player_id, value, now, rng=None):
     return new, "Answer locked in!"
 
 
-def _close_remaining_games(player, now):
+def _close_remaining_games(player, now, order):
     """Count every game this player hasn't answered as not answered, ending now."""
     while len(player["results"]) < len(GAMES):
-        seconds = round(max(0.0, min(GAME_SECONDS, now - player["game_started_at"])), 1)
+        limit = GAME_TIMES[order[len(player["results"])]]
+        seconds = round(max(0.0, min(limit, now - player["game_started_at"])), 1)
         player["results"].append({"correct": False, "seconds": seconds, "timed_out": True})
         player["game_started_at"] = now
 
@@ -613,12 +573,14 @@ def player_left(tour, by_id, player_id, now, rng=None):
         return tour, "That player is already marked as gone."
     i = duel_index(tour, player_id)
     if tour["round1"]["results"][i] is not None:
-        return tour, "That duel is already decided."
+        return tour, "That round is already decided." if is_free_for_all(tour) else "That duel is already decided."
 
     new = copy.deepcopy(tour)
     new["round1"].setdefault("left", []).append(player_id)
-    _close_remaining_games(new["round1"]["players"][player_id], now)
+    _close_remaining_games(new["round1"]["players"][player_id], now, order_of(new, player_id))
     new, _ = settle(new, now, rng)
+    if is_free_for_all(tour):
+        return new, "Marked as gone; they're out of the game."
     return new, "Marked as gone; their opponent goes through."
 
 
@@ -632,8 +594,8 @@ def end_round_now(tour, by_id, now, rng=None):
         return tour, "Round 1 hasn't started yet."
 
     new = copy.deepcopy(tour)
-    for player in new["round1"]["players"].values():
-        _close_remaining_games(player, now)
+    for pid, player in new["round1"]["players"].items():
+        _close_remaining_games(player, now, order_of(new, pid))
     new, _ = settle(new, now, rng)            # this may open tie-breakers for drawn duels…
     if new["status"] == "round1":
         # …so close every open tie-breaker straight away: whoever answered counts,
@@ -653,16 +615,23 @@ def settle(tour, now, rng=None):
     r1 = new["round1"]
 
     if new["status"] == "round1":
-        # 1. A game whose 60 s ran out counts as not answered; the next one starts then.
+        # 1. A game whose time ran out counts as not answered; the next one starts then.
         for pid, player in r1["players"].items():
-            while len(player["results"]) < len(GAMES) and now >= player["game_started_at"] + GAME_SECONDS:
-                player["results"].append({"correct": False, "seconds": GAME_SECONDS, "timed_out": True})
-                player["game_started_at"] += GAME_SECONDS
+            order = order_of(new, pid)
+            while len(player["results"]) < len(GAMES):
+                limit = GAME_TIMES[order[len(player["results"])]]
+                if now < player["game_started_at"] + limit:
+                    break
+                player["results"].append({"correct": False, "seconds": limit, "timed_out": True})
+                player["game_started_at"] += limit
 
-        # 2. Decide every duel where both players are done.
-        for i, (a, b) in enumerate(new["duels"]):
+        # 2. Decide every duel (or, with 5 players, the one group) where everyone is done.
+        for i, group in enumerate(new["duels"]):
             if r1["results"][i] is None:
-                _decide_duel(new, i, a, b, now, rng)
+                if len(group) == 2:
+                    _decide_duel(new, i, group[0], group[1], now, rng)
+                else:
+                    _decide_group(new, i, group, now, rng)
 
         # 3. All duels decided: show the results straight away.
         if all(r1["results"]):
@@ -680,8 +649,13 @@ def settle(tour, now, rng=None):
 # --- getting ready for Round 2 ---------------------------------------------------------
 
 def advancing(tour):
-    """The four players going through to Round 2, in duel order."""
-    return [result["winner"] for result in tour["round1"]["results"] if result]
+    """The four players going through to Round 2: the duel winners in duel order,
+    or (5 players) everyone except the one who is out, best first."""
+    going = []
+    for result in tour["round1"]["results"]:
+        if result:
+            going.extend(result["advancing"] if "advancing" in result else [result["winner"]])
+    return going
 
 
 def ready_players(tour):
@@ -769,3 +743,68 @@ def _record(tour, i, winner, a, b, how, score, time):
     loser = b if winner == a else a
     tour["round1"]["results"][i] = {"winner": winner, "loser": loser, "decided_by": how,
                                     "points": score, "seconds": time}
+
+
+# --- 5 players: everyone together, the weakest result is out -------------------------
+
+def _tiebreak_players(tour, i):
+    """Who answers the tie-breaker of duel/group i (a duel: both; a group: the tied ones)."""
+    tiebreak = tour["round1"]["tiebreaks"].get(str(i)) or {}
+    return tiebreak.get("players", tour["duels"][i])
+
+
+def _rank_key(score, time):
+    """Better results sort first: more right answers, then less time."""
+    return lambda pid: (-score[pid], time[pid])
+
+
+def _decide_group(tour, i, group, now, rng):
+    """Free-for-all (5 players): once everyone is done, the player with the fewest
+    right answers (then the slowest) is out and the other four go through. If
+    several are tied for last, they answer the tie-breaker; a wrong (or missing)
+    answer goes out first, then the slowest answer."""
+    r1 = tour["round1"]
+    if not all(is_done(tour, pid) for pid in group):
+        return                                        # someone is still playing
+    score = {pid: points(tour, pid) for pid in group}
+    time = {pid: total_seconds(tour, pid) for pid in group}
+    ranking = sorted(group, key=_rank_key(score, time))
+
+    gone = [pid for pid in ranking if has_left(tour, pid)]
+    if gone:                                          # someone left: they are the one out
+        _record_group(tour, i, ranking, gone[-1], "left the game", score, time)
+        return
+
+    last = _rank_key(score, time)(ranking[-1])
+    tied = [pid for pid in ranking if _rank_key(score, time)(pid) == last]
+    if len(tied) == 1:
+        how = "fewest right answers" if score[ranking[-1]] < score[ranking[-2]] else "slowest"
+        _record_group(tour, i, ranking, ranking[-1], how, score, time)
+        return
+
+    tiebreak = r1["tiebreaks"].get(str(i))
+    if tiebreak is None:
+        r1["tiebreaks"][str(i)] = {"started_at": now, "answers": {}, "players": tied}
+        return
+    tied = tiebreak["players"]
+    answers = tiebreak["answers"]
+    timed_out = now >= tiebreak["started_at"] + TIEBREAK_SECONDS
+    if len(answers) < len(tied) and not timed_out:
+        return                                        # still waiting for answers
+    if not answers:
+        out, how = (rng or random.Random()).choice(tied), "draw"
+    else:
+        # Worst first: no answer, then a wrong answer, then the slowest right answer.
+        def badness(pid):
+            given = answers.get(pid)
+            if given is None:
+                return (2, 0)
+            return (0 if given["correct"] else 1, given["at"])
+        out, how = max(tied, key=badness), "tie-breaker"
+    _record_group(tour, i, ranking, out, how, score, time)
+
+
+def _record_group(tour, i, ranking, out, how, score, time):
+    order = [pid for pid in ranking if pid != out] + [out]
+    tour["round1"]["results"][i] = {"winner": None, "loser": out, "advancing": order[:-1], "ranking": order,
+                                    "decided_by": how, "points": score, "seconds": time}
