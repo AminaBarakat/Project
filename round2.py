@@ -15,9 +15,10 @@ ROUTE_CHOICES = {
 WRONG_DOORS = {"Vault": "Cellar", "Gallery": "Kitchen"}
 LOCKOUT_SECONDS = 10
 ROUND_SECONDS = 180
+INTRO_SECONDS = 5
 
 
-def new_round(player_ids, now, rng=None):
+def new_round(player_ids, now, rng=None, show_intro=False):
     """Pair the four Round 1 winners and create their shared vault state."""
     if len(player_ids) != 4 or len(set(player_ids)) != 4:
         raise ValueError("Round 2 needs exactly four different players.")
@@ -41,7 +42,7 @@ def new_round(player_ids, now, rng=None):
         for card, player_id in zip(("A", "B"), pair):
             players[player_id] = {"duo_id": duo_id, "card": card}
 
-    return {
+    round_state = {
         "started_at": now,
         "players": players,
         "duos": duos,
@@ -49,6 +50,15 @@ def new_round(player_ids, now, rng=None):
         "resolved_at": None,
         "decided_by": None,
     }
+    if show_intro:
+        round_state["intro_ends_at"] = now + INTRO_SECONDS
+        round_state["challenge_started_at"] = round_state["intro_ends_at"]
+    return round_state
+
+
+def _challenge_started_at(round_state):
+    """Use the post-intro server time for the challenge clock when an intro exists."""
+    return round_state.get("challenge_started_at", round_state["started_at"])
 
 
 def _validate_action(tour, player_id, duo_id, now):
@@ -72,7 +82,9 @@ def _validate_action(tour, player_id, duo_id, now):
     duo = round_state.get("duos", {}).get(duo_id)
     if not duo:
         return None, None, "That duo doesn't exist."
-    if now >= round_state["started_at"] + ROUND_SECONDS:
+    if now < round_state.get("intro_ends_at", round_state["started_at"]):
+        return None, None, "The Round 2 introduction is still playing."
+    if now >= _challenge_started_at(round_state) + ROUND_SECONDS:
         return None, None, "Time is up. The result is being settled."
     if duo.get("finished_at") is not None:
         return None, None, "Your duo has already finished."
@@ -134,12 +146,28 @@ def choose_door(tour, player_id, duo_id, destination, now, rng=None):
     return new, f"Safe choice. You reached {destination}."
 
 
+def prepare_round(tour, now, rng=None):
+    """Start the shared Round 2 introduction when the first device opens this screen.
+
+    This keeps the ready/start transition in Round 1 independent of the intro UI,
+    while persisting one server-clock deadline for every device to display.
+    """
+    round_state = tour.get("round2")
+    if tour.get("status") == "round2" and round_state and round_state.get("intro_ends_at") is None:
+        new = copy.deepcopy(tour)
+        intro_ends_at = round_state.get("started_at", now) + INTRO_SECONDS
+        new["round2"]["intro_ends_at"] = intro_ends_at
+        new["round2"]["challenge_started_at"] = intro_ends_at
+        tour = new
+    return settle(tour, now, rng)
+
+
 def settle(tour, now, rng=None):
     """Resolve the timeout once. Storage serializes this with every other action."""
     round_state = tour.get("round2")
     if tour.get("status") != "round2" or not round_state:
         return tour, ""
-    if now < round_state["started_at"] + ROUND_SECONDS:
+    if now < _challenge_started_at(round_state) + ROUND_SECONDS:
         return tour, ""
 
     solved = [duo_id for duo_id, duo in round_state["duos"].items()
@@ -203,8 +231,8 @@ def player_view(tour, player_id):
         "alarm_count": duo["alarm_count"],
         "locked_until": duo["locked_until"],
         "finished_at": duo["finished_at"],
-        "started_at": round_state["started_at"],
-        "ends_at": round_state["started_at"] + ROUND_SECONDS,
+        "started_at": _challenge_started_at(round_state),
+        "ends_at": _challenge_started_at(round_state) + ROUND_SECONDS,
         "advanced": round_state["winner"] == duo_id,
     })
     return view

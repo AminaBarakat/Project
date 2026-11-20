@@ -23,7 +23,7 @@ def show(code, me):
 @st.fragment(run_every=REFRESH)
 def _live_round(code, me):
     now = time.time()                         # server clock; never accept a browser timestamp
-    tour, _ = storage.update(code, rules.settle, now)
+    tour, _ = storage.update(code, rules.prepare_round, now)
     if tour is None:
         st.error("This tournament is no longer available.")
         return
@@ -31,6 +31,10 @@ def _live_round(code, me):
         st.rerun(scope="app")
 
     view = rules.player_view(tour, me)
+    intro_ends_at = tour["round2"].get("intro_ends_at")
+    if tour["status"] == "round2" and intro_ends_at is not None and now < intro_ends_at:
+        _round2_intro(tour, me, intro_ends_at, now)
+        return
     if tour["status"] == "final":
         _end_screen(code, tour, me, view)
         return
@@ -77,6 +81,61 @@ def _live_round(code, me):
         _map(code, me, view)
 
     st.info("The other duo is still in the challenge. First to reach the Rooftop advances.")
+
+
+def _round2_intro(tour, me, intro_ends_at, now):
+    st.markdown(art.heading("duel", "Round 2: Duo Vault Challenge", size=44, level=1),
+                unsafe_allow_html=True)
+    st.markdown("### Two duos. One vault. Who reaches the rooftop first?")
+
+    teams = []
+    for duo_id, duo in tour["round2"]["duos"].items():
+        players = [tournament.find_player(tour, player_id) for player_id in duo["players"]]
+        teams.append((duo_id, players))
+
+    cards = []
+    for index, (duo_id, players) in enumerate(teams, start=1):
+        portraits = "".join(common.profile_card(player) for player in players if player is not None)
+        yours = me in tour["round2"]["duos"][duo_id]["players"]
+        label = f"DUO {index}" + (" · YOUR TEAM" if yours else "")
+        cards.append(
+            f"<section class='r2-intro-team' aria-label='{label}'>"
+            f"<div class='r2-intro-team-title'>{label}</div>"
+            f"<div class='r2-intro-players'>{portraits}</div></section>"
+        )
+
+    st.markdown("""
+    <style>
+    .r2-intro-matchup { align-items:center; display:grid; gap:clamp(.5rem,2vw,1.4rem);
+      grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); margin:1.25rem auto; max-width:980px; }
+    .r2-intro-team { background:linear-gradient(145deg,rgba(99,50,150,.58),rgba(30,15,60,.76));
+      border:1px solid rgba(180,194,255,.55); border-radius:18px; box-shadow:0 0 20px rgba(143,105,255,.22);
+      min-width:0; padding:1rem .5rem .8rem; }
+    .r2-intro-team-title { color:#e7d2ff; font-family:Cinzel,Georgia,serif; font-size:.95rem;
+      font-weight:800; letter-spacing:.1em; margin-bottom:.8rem; text-align:center; }
+    .r2-intro-players { align-items:flex-start; display:flex; gap:.15rem; justify-content:center; }
+    .r2-intro-players .mm-profile { flex:1 1 0; min-width:0; }
+    .r2-intro-players .mm-profile-photo { height:clamp(66px,10vw,112px); width:clamp(66px,10vw,112px); }
+    .r2-intro-players .mm-profile-name { font-size:clamp(.72rem,1.6vw,.95rem); }
+    .r2-intro-vs { color:#f5edff; font-family:Cinzel,Georgia,serif; font-size:clamp(2.4rem,6vw,4.4rem);
+      font-weight:900; letter-spacing:.05em; text-shadow:0 0 8px #c4a0ff,0 0 22px #8c49df; }
+    .r2-intro-start { color:#d5c0e8; margin:.7rem 0 0; text-align:center; }
+    @media(max-width:620px) {
+      .r2-intro-matchup { gap:.3rem; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); }
+      .r2-intro-team { padding:.8rem .25rem .6rem; }
+      .r2-intro-team-title { font-size:.76rem; letter-spacing:.04em; }
+      .r2-intro-players .mm-profile-photo { height:64px; width:64px; }
+      .r2-intro-vs { font-size:1.8rem; }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    st.markdown(
+        f"<div class='r2-intro-matchup'>{cards[0]}<div class='r2-intro-vs'>VS</div>{cards[1]}</div>",
+        unsafe_allow_html=True,
+    )
+    st.caption("Round 1's four winners have been paired into two teams. Combine your clues to open the vault.")
+    seconds = max(1, math.ceil(intro_ends_at - now))
+    st.markdown(f"<p class='r2-intro-start'>The challenge begins in {seconds}…</p>", unsafe_allow_html=True)
 
 
 def _feedback_key(code):
