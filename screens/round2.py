@@ -218,12 +218,23 @@ def _clue_card(code, me, clue):
     .r2-card-back {{ color: #fff; font-size: 1.25rem; font-weight: 900; letter-spacing: .14em;
       background: radial-gradient(ellipse 42% 46% at 50% 50%, #34366f 0 80%, transparent 82%),
       linear-gradient(135deg, #32164e, #302b69 57%, #172e5b); }}
-    .r2-card-front {{ transform: rotateY(180deg); color: #fbf7ff;
+    .r2-card-front {{ position:relative; overflow:hidden; transform: rotateY(180deg); color: #fbf7ff;
       background: linear-gradient(145deg, #432274 0%, #34265f 52%, #173c70 100%); }}
+    .r2-card-front::after {{ content:""; position:absolute; inset:10px; border:1px solid rgba(218,183,255,.52);
+      border-radius:12px; box-shadow:inset 0 0 15px rgba(181,104,255,.16); pointer-events:none; }}
+    .r2-card-neon-loop {{ position:absolute; top:20px; right:25px; width:100px; height:100px;
+      border:2px solid rgba(222,177,255,.72); border-radius:50%; opacity:.64;
+      box-shadow:0 0 8px #b76cff, 0 0 20px rgba(183,108,255,.72), inset 0 0 13px rgba(183,108,255,.48);
+      animation:r2-neon-loop 2.8s ease-in-out infinite; pointer-events:none; }}
+    @keyframes r2-neon-loop {{ 0%,100% {{ opacity:.42; transform:scale(.95); }} 50% {{ opacity:.84; transform:scale(1.05); }} }}
+    .r2-card-footprint {{ position:absolute; bottom:18px; z-index:1; opacity:.62;
+      filter:drop-shadow(0 0 7px rgba(203,151,255,.9)); pointer-events:none; }}
+    .r2-card-footprint-left {{ left:22px; transform:rotate(-20deg); }}
+    .r2-card-footprint-right {{ right:22px; transform:rotate(20deg) scaleX(-1); }}
     .r2-card-front-label {{ color: #d8bdff; font-size: .78rem; font-weight: 900;
-      letter-spacing: .18em; margin-bottom: .8rem; text-transform: uppercase; }}
+      letter-spacing: .18em; margin-bottom: .8rem; text-transform: uppercase; position:relative; z-index:2; }}
     .r2-card-front-clue {{ font-size: clamp(1rem,2.5vw,1.3rem); font-weight: 700;
-      line-height: 1.55; margin: 0; white-space: pre-line; }}
+      line-height: 1.55; margin: 0; white-space: pre-line; position:relative; z-index:2; }}
     @media(max-width:560px) {{
       .st-key-{button_key} div.stButton > button {{ min-height: 270px; }}
       .r2-card-scene {{ height: 270px; }}
@@ -244,6 +255,9 @@ def _clue_card(code, me, clue):
         "<div class='r2-clue-card'>"
         "<div class='r2-card-face r2-card-back'>Tap here</div>"
         "<div class='r2-card-face r2-card-front'>"
+        "<div class='r2-card-neon-loop' aria-hidden='true'></div>"
+        f"<div class='r2-card-footprint r2-card-footprint-left' aria-hidden='true'>{art.icon('footprint', 34)}</div>"
+        f"<div class='r2-card-footprint r2-card-footprint-right' aria-hidden='true'>{art.icon('footprint', 34)}</div>"
         "<div class='r2-card-front-label'>Your clue</div>"
         f"<p class='r2-card-front-clue'>{html.escape(clue)}</p>"
         "</div></div></div>",
@@ -269,40 +283,29 @@ def _show_feedback(code, message):
 
 
 def _code_form(code, me, duo_id):
-    input_class = art.css_key(f"r2_{code}_vault_code")
     input_key = f"r2_{code}_vault_code"
-    shell_key = f"r2_{code}_vault_lock_shell"
-    shell_class = art.css_key(shell_key)
-    typed = str(st.session_state.get(input_key, ""))[:4]
-    digits = [character if character in "0123456789" else "?" for character in typed]
-    digits.extend(["?"] * (4 - len(digits)))
-    lock_svg = art.padlock(digits).replace(f'fill="{art.BG}"', 'fill="#000000"')
+    lock_key = art.css_key(f"r2_vault_{code}")
+    st.markdown(art.lock_style(lock_key, digits=4), unsafe_allow_html=True)
     st.markdown(f"""
     <style>
-    .st-key-{shell_class} {{ max-width: 360px; margin: .7rem auto 1rem; text-align: center; }}
-    .r2-vault-entry {{ margin: .7rem auto .1rem; text-align: center; }}
-    .r2-vault-entry-title {{ color: #f3e6ff; font-family: Cinzel, Georgia, serif;
-      font-size: 1.15rem; font-weight: 800; letter-spacing: .08em;
-      margin-bottom: -.35rem; text-shadow: 0 0 10px rgba(186,115,255,.7); }}
-    .st-key-{input_class} {{ max-width: 230px; margin: -.15rem auto .35rem; }}
-    .st-key-{input_class} input {{ font-family: "Courier New", monospace !important; font-size: 1.45rem !important;
-      font-weight: 800 !important; letter-spacing: .35em; text-align: center !important; }}
-    .st-key-{shell_class} div.stButton {{ display: flex; justify-content: center; }}
-    .st-key-{shell_class} div.stButton > button {{ width: auto !important; min-width: 132px; }}
+    .st-key-{lock_key} div.stFormSubmitButton {{ display:flex; justify-content:center; }}
+    .st-key-{lock_key} div.stFormSubmitButton > button {{ width:auto !important; min-width:132px; }}
     </style>
     """, unsafe_allow_html=True)
-    with st.container(key=shell_key):
-        st.markdown(
-            "<div class='r2-vault-entry'><div class='r2-vault-entry-title'>Type the code</div>"
-            + art.img(lock_svg, width="220px")
-            + "</div>",
-            unsafe_allow_html=True,
-        )
-        value = st.text_input(
-            "Enter the four-digit vault code", max_chars=4, type="default", placeholder="e.g. 3583",
-            label_visibility="collapsed", key=input_key,
-        )
-        if st.button("Unlock", type="primary", key=f"r2_{code}_vault_unlock"):
+    st.markdown(
+        "<div style='text-align:center;margin-top:.3rem'>"
+        + art.img(art.shackle(), width="150px").replace("margin:auto", "margin:0 auto -4px")
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+    with st.container(key=lock_key):
+        with st.form(f"r2_{code}_vault_form", border=False):
+            value = st.text_input(
+                "Enter the four-digit vault code", max_chars=4, type="default", placeholder="····",
+                label_visibility="collapsed", key=input_key,
+            )
+            submitted = st.form_submit_button("Unlock", type="primary")
+        if submitted:
             _, message = storage.update(code, rules.submit_code, me, duo_id, value, time.time())
             _show_feedback(code, message)
 
