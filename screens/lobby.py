@@ -41,9 +41,9 @@ RIDDLES = [
     ("What can you catch but not throw?", "A cold"),
 ]
 
-STEPS = [("1", "Round 1", "four quick puzzles, against one rival (or, with 5 players, everyone)"),
-         ("2", "Round 2", "two duos race to open the vault"),
-         ("3", "Round 3", "the final two solve the mystery")]
+STEPS = [("1", "Round 1", "Four quick puzzles, against one rival (or, with 5 players, everyone)"),
+         ("2", "Round 2", "Two duos race to open the vault"),
+         ("3", "Round 3", "The final two solve the mystery")]
 
 
 # --- our own small drawings for the greeting buttons ------------------------------------
