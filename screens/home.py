@@ -59,22 +59,32 @@ STYLE = """<style>
   font-size: 1.15rem; margin: 0 0 .8rem; }
 </style>"""
 
-STEPS = ("<div class='mm-steps'>"
-         "<span class='mm-step'><b>1</b>Round 1 · four duels</span>"
-         "<span class='mm-step'><b>2</b>Round 2 · the vault</span>"
-         "<span class='mm-step'><b>3</b>Round 3 · the final mystery</span></div>")
+ROUND1_CHIP = {5: "Round 1 · Everyone vs everyone", 8: "Round 1 · Four duels", None: "Round 1 · Quick puzzles"}
+GUESTS = {5: "FIVE GUESTS · ", 8: "EIGHT GUESTS · ", None: ""}
 
 
-def _hero():
+def _hero(size=None):
+    """Title, tagline and the three round chips. The host's page shows the version
+    for the number of players they pick (5: everyone together in Round 1, 8: duels).
+    Someone joining hasn't chosen anything, so they see a neutral version (None);
+    the lobby shows the right one once they're in."""
     st.markdown(STYLE, unsafe_allow_html=True)
     common.show_wordmark()
-    st.markdown("<div class='mm-tagline'>EIGHT GUESTS · ONE MANSION · ONE LAST CLUE</div>" + STEPS,
+    steps = ("<div class='mm-steps'>"
+             f"<span class='mm-step'><b>1</b>{ROUND1_CHIP[size]}</span>"
+             "<span class='mm-step'><b>2</b>Round 2 · The vault</span>"
+             "<span class='mm-step'><b>3</b>Round 3 · The final mystery</span></div>")
+    st.markdown(f"<div class='mm-tagline'>{GUESTS[size]}ONE MANSION · ONE LAST CLUE</div>" + steps,
                 unsafe_allow_html=True)
 
 
 def show():
-    _hero()
     mode = st.session_state.setdefault("mm_home_mode", "host")
+    if mode == "host":
+        _hero(st.session_state.setdefault("mm_table_size", rules.MAX_PLAYERS))   # follows the 5 | 8 switch
+    else:
+        _hero()                                                                # neutral: the code decides
+
     # The pill switch. The outer container's key says which half is lit.
     with st.container(key=f"mm_mode_on_{mode}"):
         with st.container(key="mm_mode"):
@@ -127,7 +137,7 @@ def show_create():
 
 def show_join(prefilled_code=""):
     """Used by app.py when someone opens a join link: the same look, join form only."""
-    _hero()
+    _hero()                            # neutral, like the Join tab: the lobby shows the game's version
     with st.container(key="mm_home_card"):
         st.markdown(f"<div class='mm-join-title'>Join tournament {prefilled_code}</div>", unsafe_allow_html=True)
         _join_form(prefilled_code)
