@@ -7,7 +7,6 @@ import base64
 import html
 from functools import lru_cache
 from pathlib import Path
-from urllib.parse import urlencode
 
 import streamlit as st
 
@@ -129,17 +128,14 @@ def show_wordmark():
 def avatar_picker(key, unavailable=()):
     """A compact, picture-only detective picker.
 
-    The whole portrait is a link, instead of hiding a Streamlit button over an
-    image. That keeps the target reliably clickable across Streamlit versions.
+    Each portrait is an in-page Streamlit button. Keeping the selection in
+    session state means choosing a different detective never changes the URL
+    (and therefore never creates a second player page).
     """
     from screens import avatars          # imported here: avatars.py itself uses this file
 
     choice_key = f"{key}_choice"
-    query_key = f"{key}_avatar"
     unavailable = set(unavailable)
-    picked_from_link = st.query_params.get(query_key)
-    if picked_from_link in AVATARS and picked_from_link not in unavailable:
-        st.session_state[choice_key] = picked_from_link
     if choice_key not in st.session_state or st.session_state[choice_key] in unavailable:
         st.session_state[choice_key] = next((option for option in AVATARS if option not in unavailable), "girl")
     options = list(AVATARS)
@@ -147,36 +143,53 @@ def avatar_picker(key, unavailable=()):
 
     css = """
     <style>
-    .mm-avatar-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:.7rem; }
-    .mm-avatar-choice { display:block; position:relative; aspect-ratio:1 / 1; overflow:hidden; border-radius:14px;
+    .mm-avatar-taken { position:relative; aspect-ratio:1 / 1; overflow:hidden; border-radius:14px;
       background:radial-gradient(circle at 50% 30%, #4b2a86, #1d1438 75%); border:2px solid transparent;
-      transition:transform .15s ease, box-shadow .15s ease; }
-    .mm-avatar-choice:hover { transform:translateY(-3px); border-color:#b57bff; box-shadow:0 0 16px rgba(181,123,255,.5); }
-    .mm-avatar-choice--selected { border-color:#9be4ff; box-shadow:0 0 16px rgba(155,228,255,.55); }
-    .mm-avatar-choice--selected::after { content:'✓'; position:absolute; top:5px; right:9px; color:#9be4ff;
-      font:bold 1.35rem Arial,sans-serif; text-shadow:0 0 6px #000; }
-    .mm-avatar-choice--taken { cursor:not-allowed; }
-    .mm-avatar-choice--taken::before { content:''; position:absolute; inset:0; z-index:1;
+    }
+    .mm-avatar-taken::before { content:''; position:absolute; inset:0; z-index:1;
       background:rgba(54, 22, 94, .66); box-shadow:inset 0 0 32px rgba(8, 3, 20, .65); }
-    .mm-avatar-choice img { width:100%; height:100%; object-fit:contain; display:block; }
-    @media (max-width:560px) { .mm-avatar-grid { gap:.42rem; } }
+    .mm-avatar-taken img { width:100%; height:100%; object-fit:contain; display:block; }
     </style>
     """
-    params = {name: st.query_params.get(name) for name in ("code", "me") if st.query_params.get(name)}
+    card_styles = []
     cards = []
     for option in options:
         label, path = AVATARS[option]
         picture = avatars.thumbnail(path, 200)
-        classes = "mm-avatar-choice" + (" mm-avatar-choice--selected" if option == chosen else "")
+        card_key = f"{key}_card_{option}"
         if option in unavailable:
-            cards.append(f'<span class="{classes} mm-avatar-choice--taken" aria-label="{html.escape(label)} taken">'
-                         f'<img src="{picture}" alt="" /></span>')
+            cards.append((card_key, None, f'<div class="mm-avatar-taken" aria-label="{html.escape(label)} taken">'
+                         f'<img src="{picture}" alt="" /></div>'))
             continue
-        href_params = {**params, query_key: option}
-        cards.append(f'<a class="{classes}" href="?{urlencode(href_params)}" aria-label="Choose {html.escape(label)}">'
-                     f'<img src="{picture}" alt="" /></a>')
-    st.markdown("<div class='mm-label'>Choose your detective</div>" + css +
-                "<div class='mm-avatar-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
+        selected = option == chosen
+        card_styles.append(f"""
+        .st-key-{card_key} div.stButton > button {{
+          aspect-ratio:1 / 1; background-image:url('{picture}'),radial-gradient(circle at 50% 30%, #4b2a86, #1d1438 75%) !important;
+          background-size:contain,cover !important; background-position:center !important; background-repeat:no-repeat !important;
+          border:2px solid {'#9be4ff' if selected else 'transparent'} !important; border-radius:14px !important;
+          box-shadow:{'0 0 16px rgba(155,228,255,.7)' if selected else 'none'} !important;
+          color:transparent !important; padding:0 !important; transition:transform .15s ease, box-shadow .15s ease !important;
+        }}
+        .st-key-{card_key} div.stButton > button:hover {{ transform:translateY(-3px); border-color:#b57bff !important;
+          box-shadow:0 0 16px rgba(181,123,255,.5) !important; }}
+        .st-key-{card_key} div.stButton > button p {{ color:transparent !important; }}
+        {' .st-key-' + card_key + ' div.stButton > button::after { content:"✓"; position:absolute; top:5px; right:9px; color:#9be4ff; font:bold 1.35rem Arial,sans-serif; text-shadow:0 0 6px #000; }' if selected else ''}
+        """)
+        cards.append((card_key, (label, option), None))
+
+    st.markdown("<div class='mm-label'>Choose your detective</div>" + css + "<style>" + "".join(card_styles) + "</style>",
+                unsafe_allow_html=True)
+    for row_start in range(0, len(cards), 4):
+        for column, (card_key, button, taken_html) in zip(st.columns(4), cards[row_start:row_start + 4]):
+            with column:
+                with st.container(key=card_key):
+                    if taken_html:
+                        st.markdown(taken_html, unsafe_allow_html=True)
+                    else:
+                        label, option = button
+                        if st.button(label, key=f"{key}_choose_{option}", width="stretch"):
+                            st.session_state[choice_key] = option
+                            st.rerun()
     return st.session_state[choice_key]
 
 
