@@ -146,6 +146,22 @@ def choose_door(tour, player_id, duo_id, destination, now, rng=None):
     return new, f"Safe choice. You reached {destination}."
 
 
+def prepare_round(tour, now, rng=None):
+    """Start the shared Round 2 introduction when the first device opens this screen.
+
+    This keeps the ready/start transition in Round 1 independent of the intro UI,
+    while persisting one server-clock deadline for every device to display.
+    """
+    round_state = tour.get("round2")
+    if tour.get("status") == "round2" and round_state and round_state.get("intro_ends_at") is None:
+        new = copy.deepcopy(tour)
+        intro_ends_at = round_state.get("started_at", now) + INTRO_SECONDS
+        new["round2"]["intro_ends_at"] = intro_ends_at
+        new["round2"]["challenge_started_at"] = intro_ends_at
+        tour = new
+    return settle(tour, now, rng)
+
+
 def settle(tour, now, rng=None):
     """Resolve the timeout once. Storage serializes this with every other action."""
     round_state = tour.get("round2")

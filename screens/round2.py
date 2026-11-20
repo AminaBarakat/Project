@@ -20,7 +20,7 @@ def show(code, me):
 @st.fragment(run_every=REFRESH)
 def _live_round(code, me):
     now = time.time()                         # server clock; never accept a browser timestamp
-    tour, _ = storage.update(code, rules.settle, now)
+    tour, _ = storage.update(code, rules.prepare_round, now)
     if tour is None:
         st.error("This tournament is no longer available.")
         return
