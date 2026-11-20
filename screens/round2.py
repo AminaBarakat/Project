@@ -192,7 +192,7 @@ def _clue_card(code, me, clue):
     <style>
     .st-key-{button_key} {{ max-width: 520px; margin: .75rem auto 1rem; }}
     .st-key-{button_key} div.stButton > button {{
-      min-height: 320px; border: 3px solid #9d55ff !important; border-radius: 18px !important;
+      position:relative; overflow:hidden; min-height: 320px; border: 3px solid #9d55ff !important; border-radius: 18px !important;
       color: #fff !important; font-size: 1.25rem !important; font-weight: 900 !important;
       letter-spacing: .14em; text-shadow: 0 2px 8px #10071f;
       background:
@@ -201,28 +201,35 @@ def _clue_card(code, me, clue):
       box-shadow: 0 0 18px rgba(159,85,255,.48), inset 0 0 22px rgba(186,142,255,.2);
       transition: transform .18s ease, box-shadow .18s ease;
     }}
+    .st-key-{button_key} div.stButton > button::before {{ content:""; position:absolute; top:20px; right:25px;
+      width:66px; height:66px; border:2px solid rgba(222,177,255,.72); border-radius:50%; opacity:.62;
+      box-shadow:0 0 8px #b76cff,0 0 18px rgba(183,108,255,.7),inset 0 0 11px rgba(183,108,255,.42);
+      animation:r2-neon-loop 2.8s ease-in-out infinite; }}
+    .st-key-{button_key} div.stButton > button::after {{ content:"👣     👣"; white-space:pre;
+      position:absolute; right:20px; bottom:14px; left:20px; display:flex; justify-content:space-between;
+      color:#ddd0ff; font-size:1.45rem; letter-spacing:.1em; opacity:.58; filter:drop-shadow(0 0 6px rgba(203,151,255,.85)); }}
     .st-key-{button_key} div.stButton > button:hover {{
       border-color: #c9a6ff !important; transform: translateY(-3px);
       box-shadow: 0 0 28px rgba(159,85,255,.72), inset 0 0 24px rgba(186,142,255,.27);
     }}
     .st-key-{button_key} div.stButton > button p {{ color: #fff !important; }}
-    .r2-card-scene {{ height: 320px; max-width: 520px; margin: .75rem auto 1rem; perspective: 1100px; }}
-    .r2-clue-card {{ height: 100%; position: relative; transform-style: preserve-3d;
+    .r2-card-scene {{ display:block; height: 320px !important; min-height:320px !important; max-width: 520px; margin: .75rem auto 1rem; perspective: 1100px; }}
+    .r2-clue-card {{ height: 320px !important; min-height:320px !important; position: relative; transform-style: preserve-3d;
       animation: r2-card-flip .78s cubic-bezier(.2,.8,.25,1) both; }}
     @keyframes r2-card-flip {{ from {{ transform: rotateY(0deg); }} to {{ transform: rotateY(180deg); }} }}
-    .r2-card-face {{ position: absolute; inset: 0; display: flex; flex-direction: column;
+    .r2-card-face {{ box-sizing:border-box; position: absolute; inset: 0; height:320px !important; min-height:320px !important; display: flex; flex-direction: column;
       align-items: center; justify-content: center; padding: 1.4rem; text-align: center;
       border: 3px solid #9d55ff; border-radius: 18px; backface-visibility: hidden;
       -webkit-backface-visibility: hidden; box-shadow: 0 0 22px rgba(159,85,255,.48),
       inset 0 0 24px rgba(186,142,255,.18); }}
-    .r2-card-back {{ color: #fff; font-size: 1.25rem; font-weight: 900; letter-spacing: .14em;
+    .r2-card-back {{ position:relative; overflow:hidden; color: #fff; font-size: 1.25rem; font-weight: 900; letter-spacing: .14em;
       background: radial-gradient(ellipse 42% 46% at 50% 50%, #34366f 0 80%, transparent 82%),
       linear-gradient(135deg, #32164e, #302b69 57%, #172e5b); }}
     .r2-card-front {{ position:relative; overflow:hidden; transform: rotateY(180deg); color: #fbf7ff;
       background: linear-gradient(145deg, #432274 0%, #34265f 52%, #173c70 100%); }}
     .r2-card-front::after {{ content:""; position:absolute; inset:10px; border:1px solid rgba(218,183,255,.52);
       border-radius:12px; box-shadow:inset 0 0 15px rgba(181,104,255,.16); pointer-events:none; }}
-    .r2-card-neon-loop {{ position:absolute; top:20px; right:25px; width:100px; height:100px;
+    .r2-card-neon-loop {{ position:absolute; top:20px; right:25px; width:66px; height:66px;
       border:2px solid rgba(222,177,255,.72); border-radius:50%; opacity:.64;
       box-shadow:0 0 8px #b76cff, 0 0 20px rgba(183,108,255,.72), inset 0 0 13px rgba(183,108,255,.48);
       animation:r2-neon-loop 2.8s ease-in-out infinite; pointer-events:none; }}
@@ -237,7 +244,7 @@ def _clue_card(code, me, clue):
       line-height: 1.55; margin: 0; white-space: pre-line; position:relative; z-index:2; }}
     @media(max-width:560px) {{
       .st-key-{button_key} div.stButton > button {{ min-height: 270px; }}
-      .r2-card-scene {{ height: 270px; }}
+      .r2-card-scene, .r2-clue-card, .r2-card-face {{ height: 270px !important; min-height:270px !important; }}
       .r2-card-face {{ padding: 1rem; }}
     }}
     @media(prefers-reduced-motion:reduce) {{ .r2-clue-card {{ animation-duration: .01ms; }} }}
@@ -253,7 +260,11 @@ def _clue_card(code, me, clue):
     st.markdown(
         "<div class='r2-card-scene' role='group' aria-label='Your revealed clue'>"
         "<div class='r2-clue-card'>"
-        "<div class='r2-card-face r2-card-back'>Tap here</div>"
+        "<div class='r2-card-face r2-card-back'>"
+        "<div class='r2-card-neon-loop' aria-hidden='true'></div>"
+        f"<div class='r2-card-footprint r2-card-footprint-left' aria-hidden='true'>{art.icon('footprint', 34)}</div>"
+        f"<div class='r2-card-footprint r2-card-footprint-right' aria-hidden='true'>{art.icon('footprint', 34)}</div>"
+        "Tap here</div>"
         "<div class='r2-card-face r2-card-front'>"
         "<div class='r2-card-neon-loop' aria-hidden='true'></div>"
         f"<div class='r2-card-footprint r2-card-footprint-left' aria-hidden='true'>{art.icon('footprint', 34)}</div>"
