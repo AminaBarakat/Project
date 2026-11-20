@@ -44,7 +44,7 @@ def _live_round(code, me):
         return
 
     st.title("Round 2: Duo Vault Challenge")
-    st.caption("Three minutes. Combine your clues, open the vault, then find the safe route.")
+    st.caption("One minute. Combine your clues, open the vault, then find the safe route.")
     teammate = view.get("teammate")
     if teammate:
         st.markdown(f"Your teammate: {common.player_label(teammate)}")
@@ -298,5 +298,5 @@ def _end_screen(code, tour, me, view):
                 st.rerun(scope="app")
             st.error(message)
     if view.get("decided_by") == "timeout":
-        st.caption("The round ended at its server-set three-minute limit.")
+        st.caption("The round ended at its server-set one-minute limit.")
 

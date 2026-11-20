@@ -14,7 +14,7 @@ ROUTE_CHOICES = {
 }
 WRONG_DOORS = {"Vault": "Cellar", "Gallery": "Kitchen"}
 LOCKOUT_SECONDS = 10
-ROUND_SECONDS = 180
+ROUND_SECONDS = 60
 INTRO_SECONDS = 5
 
 
