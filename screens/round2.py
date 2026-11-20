@@ -246,40 +246,30 @@ def _show_feedback(code, message):
 
 def _code_form(code, me, duo_id):
     input_class = art.css_key(f"r2_{code}_vault_code")
-    form_key = f"r2_{code}_vault_form"
+    input_key = f"r2_{code}_vault_code"
+    typed = str(st.session_state.get(input_key, ""))[:4]
+    digits = [character if character in "0123456789" else "?" for character in typed]
+    digits.extend(["?"] * (4 - len(digits)))
     st.markdown(f"""
     <style>
     .r2-vault-entry {{ margin: .7rem auto .35rem; text-align: center; }}
     .r2-vault-entry-title {{ color: #f3e6ff; font-family: Cinzel, Georgia, serif;
       font-size: 1.15rem; font-weight: 800; letter-spacing: .08em;
       margin-bottom: -.35rem; text-shadow: 0 0 10px rgba(186,115,255,.7); }}
-    div[data-testid="stForm"]:has(.st-key-{input_class}) {{ position: relative; }}
-    .st-key-{input_class} {{ position: absolute; z-index: 3; top: 164px; left: 50%;
-      transform: translateX(-50%); width: 158px; max-width: 158px; margin: 0 !important; }}
-    .st-key-{input_class} [data-testid="stTextInputRootElement"],
-    .st-key-{input_class} [data-baseweb="input"] {{ background: transparent !important;
-      border: 0 !important; box-shadow: none !important; min-height: 52px; }}
-    .st-key-{input_class} input {{ background: transparent !important; border: 0 !important;
-      box-shadow: none !important; color: #29213b !important; caret-color: #5e238d;
-      font-family: "Courier New", monospace !important; font-size: 1.6rem !important;
-      font-weight: 900 !important; letter-spacing: 1.67rem !important; line-height: 1 !important;
-      height: 52px !important; padding: 0 !important; text-align: center !important; }}
-    .st-key-{input_class} input:focus {{ outline: none !important; }}
+    .st-key-{input_class} {{ max-width: 440px; margin: 0 auto .8rem; }}
     </style>
     """, unsafe_allow_html=True)
-    with st.form(form_key, clear_on_submit=False):
-        st.markdown(
-            "<div class='r2-vault-entry'><div class='r2-vault-entry-title'>Type the code</div>"
-            + art.img(art.padlock(["", "", "", ""]), width="220px")
-            + "</div>",
-            unsafe_allow_html=True,
-        )
-        value = st.text_input(
-            "Enter the four-digit vault code", max_chars=4, type="default", placeholder="",
-            label_visibility="collapsed", key=f"r2_{code}_vault_code",
-        )
-        submitted = st.form_submit_button("Unlock", type="primary")
-    if submitted:
+    st.markdown(
+        "<div class='r2-vault-entry'><div class='r2-vault-entry-title'>Type the code</div>"
+        + art.img(art.padlock(digits), width="220px")
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+    value = st.text_input(
+        "Enter the four-digit vault code", max_chars=4, type="password", placeholder="Enter 4 digits",
+        label_visibility="collapsed", key=input_key,
+    )
+    if st.button("Unlock", type="primary", key=f"r2_{code}_vault_unlock"):
         _, message = storage.update(code, rules.submit_code, me, duo_id, value, time.time())
         _show_feedback(code, message)
 
