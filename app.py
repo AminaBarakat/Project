@@ -9,9 +9,15 @@ This file only decides WHICH screen to show. The rules live in tournament.py,
 the shared saving in storage.py, and the screens in screens/.
 """
 
+import time
+
+import time
+
 import streamlit as st
 from streamlit.errors import StreamlitSecretNotFoundError
 
+import fan_vote
+import round1
 import storage
 import tournament as rules
 from screens import common, home, lobby
@@ -64,6 +70,15 @@ if tour is None:
 
 if not rules.find_player(tour, me):
     # Someone who opened a join link, or a player who left or was removed.
+    # Supabase can take a moment to return the player record just written by
+    # Create/Join. Do not flash the join form during that tiny gap.
+    retry_key = f"mm-seat-retries-{code}-{me}"
+    retries = st.session_state.get(retry_key, 0)
+    if me and tour["status"] == "lobby" and retries < 4:
+        st.session_state[retry_key] = retries + 1
+        st.info("Opening your waiting room…")
+        time.sleep(0.35)
+        st.rerun()
     if me:
         st.warning("You're not in this tournament any more.")
     if tour["status"] == "lobby":
@@ -74,13 +89,42 @@ if not rules.find_player(tour, me):
             common.go_home()
     st.stop()
 
-if tour["status"] == "lobby":
-    lobby.show(tour["code"], me)
-elif tour["status"] in ("round1", "round1_results"):
-    round1_screen.show(tour["code"], me)
-elif tour["status"] in ("round2", "final"):
-    round2_screen.show(tour["code"], me)
-elif tour["status"] in ("round3", "round3_results", "finished"):
-    round3_screen.show(tour["code"], me)
-else:
-    st.error("This tournament is in an unknown game phase.")
+def _screen_id(tour, me, now):
+    """Which screen this player should be looking at (e.g. 'round1:playing:2')."""
+    status = tour["status"]
+    try:
+        if status == "round1":
+            settled, _ = round1.settle(tour, now)        # a timer that just ran out counts already
+            if settled["status"] != "round1":
+                return settled["status"]
+            return f"round1:{round1.phase(settled, me, now)}:{round1.game_number(settled, me)}"
+        if status == "round3":
+            return "round3:" + ("story" if tour["round3"].get("starts_at") is None else "mystery")
+        if status in ("round3_results", "finished"):
+            return "final:" + ("vote" if fan_vote.is_open(tour, now) else "stage")
+    except Exception:
+        pass
+    return status
+
+
+# The whole screen lives in one frame. When the player moves to another screen
+# (next game, next round, the vote, the final), the frame is wiped first, so
+# nothing from the previous screen can stay behind on the page. Taps that stay
+# on the same screen don't wipe anything, so there's no flicker while playing.
+page = st.empty()
+screen = _screen_id(tour, me, time.time())
+if st.session_state.get("mm_screen") != screen:
+    page.empty()
+    st.session_state["mm_screen"] = screen
+
+with page.container():
+    if tour["status"] == "lobby":
+        lobby.show(tour["code"], me)
+    elif tour["status"] in ("round1", "round1_results"):
+        round1_screen.show(tour["code"], me)
+    elif tour["status"] in ("round2", "final"):
+        round2_screen.show(tour["code"], me)
+    elif tour["status"] in ("round3", "round3_results", "finished"):
+        round3_screen.show(tour["code"], me)
+    else:
+        st.error("This tournament is in an unknown game phase.")

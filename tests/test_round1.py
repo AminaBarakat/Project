@@ -42,7 +42,7 @@ def wrong_answer(tour, game):
         return next(k for k in p["options"] if k != p["answer"])
     if game == "escape_route":
         return next(r for r in all_routes(p["map"]) if r != p["answer"])
-    return p["missing"][:2] + [next(i for i in r1.MEMORY_ITEMS if i not in p["missing"])]
+    return p["missing"][:2] + [next(i for i in p["options"] if i not in p["missing"])]
 
 
 def started(seed=1):
@@ -192,11 +192,28 @@ def test_memory_shows_the_others_without_the_missing_three(memory):
     assert sorted(memory["remaining"] + memory["missing"]) == sorted(r1.MEMORY_ITEMS)
 
 
+@pytest.mark.parametrize("memory", MEMORIES)
+def test_memory_offers_ten_options_with_decoys(memory):
+    options = memory["options"]
+    assert len(options) == 10 and len(set(options)) == 10
+    assert set(memory["missing"]) <= set(options)                      # the answer is there
+    assert len(set(options) & set(memory["remaining"])) == 3           # 3 still on the table
+    assert len(set(options) & set(r1.MEMORY_DECOYS)) == 4              # 4 never shown
+    assert options[:3] != memory["missing"]                            # not handed over in order
+
+
+def test_every_memory_object_and_decoy_has_a_drawing():
+    from screens import art
+    assert set(r1.MEMORY_ITEMS + r1.MEMORY_DECOYS) <= set(art.ITEMS)
+
+
 def test_memory_checks():
     memory = MEMORIES[0]
     assert r1.check("memory", ["candle", " Compass", "HOURGLASS"], memory) == "right"
-    assert r1.check("memory", ["Compass", "Candle", "Key"], memory) == "wrong"
+    assert r1.check("memory", ["Compass", "Candle", "Key"], memory) == "wrong"        # Key is still there
+    assert r1.check("memory", ["Compass", "Candle", "Teacup"], memory) == "wrong"     # a decoy
     for bad in (["Compass", "Candle"], ["Compass", "Compass", "Candle"], ["Compass", "Candle", "Dragon"],
+                ["Compass", "Candle", "Feather"],                                     # not among the options
                 ["Compass", "Candle", "Hourglass", "Key"], "Compass"):
         assert r1.check("memory", bad, memory) == "invalid"
 
@@ -471,14 +488,10 @@ def test_results_come_as_soon_as_everyone_is_done_without_waiting_for_timers():
     assert sorted(tour["eliminated"]) == sorted(losers)
 
 
-def test_results_move_on_to_round2_after_the_results_time():
+def test_results_wait_for_everyone_to_be_ready_instead_of_a_timer():
     tour = everyone_done()
-    at = tour["round1"]["results_at"]
-    early, _ = r1.settle(tour, at + r1.RESULTS_SECONDS - 1)
-    assert early["status"] == "round1_results"
-    later, _ = r1.settle(tour, at + r1.RESULTS_SECONDS)
-    assert later["status"] == "round2"
-    assert len(later["eliminated"]) == 4          # not eliminated twice
+    later, _ = r1.settle(tour, tour["round1"]["results_at"] + 600)
+    assert later["status"] == "round1_results"
 
 
 def test_no_answers_once_results_are_shown():
@@ -560,3 +573,39 @@ def test_progress_moves_with_games_and_time_but_never_reaches_the_next_game_earl
     assert r1.progress(tour, "p0", started_at(tour, "p0")) == 1
     tour = play_all(tour, "p0", [True] * 3)
     assert r1.progress(tour, "p0", started_at(tour, "p0") + 100) == 4
+
+
+# --- getting ready for Round 2 ------------------------------------------------------
+
+def test_round2_starts_when_all_four_players_going_through_are_ready():
+    tour = everyone_done()
+    going = r1.advancing(tour)
+    assert len(going) == 4
+    for pid in going[:3]:
+        tour, _ = r1.mark_ready(tour, pid, START + 100)
+        assert tour["status"] == "round1_results"
+    tour, _ = r1.mark_ready(tour, going[3], START + 101, random.Random(1))
+    assert tour["status"] == "round2"
+    assert set(tour["round2"]["players"]) == set(going)
+
+
+def test_eliminated_players_do_not_need_to_get_ready():
+    tour = everyone_done()
+    out = tour["eliminated"][0]
+    assert_refused(tour, r1.mark_ready(tour, out, START + 100))
+
+
+def test_ready_twice_or_outside_the_results_is_refused():
+    tour = everyone_done()
+    pid = r1.advancing(tour)[0]
+    tour, _ = r1.mark_ready(tour, pid, START + 100)
+    assert_refused(tour, r1.mark_ready(tour, pid, START + 101))
+    assert_refused(started(), r1.mark_ready(started(), "p0", START + 1))
+
+
+def test_host_can_start_round2_without_waiting_for_everyone():
+    tour = everyone_done()
+    assert_refused(tour, r1.start_round2_now(tour, "p1", START + 100))
+    tour, _ = r1.start_round2_now(tour, "p0", START + 100, random.Random(2))
+    assert tour["status"] == "round2"
+    assert set(tour["round2"]["players"]) == set(r1.advancing(tour))

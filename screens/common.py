@@ -7,6 +7,7 @@ import base64
 import html
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlencode
 
 import streamlit as st
 
@@ -16,6 +17,10 @@ AVATARS = {
     "boy": ("Theo · classic", "assets/detective-boy.png"),
     "girl_violet": ("Ivy · violet", "assets/detective-girl-violet.png"),
     "boy_teal": ("Theo · teal", "assets/detective-boy-teal.png"),
+    "girl_emerald": ("Ivy · emerald", "assets/detective-girl-emerald.png"),
+    "girl_ruby": ("Ivy · ruby", "assets/detective-girl-ruby.png"),
+    "boy_royal": ("Theo · royal", "assets/detective-boy-royal.png"),
+    "boy_amber": ("Theo · amber", "assets/detective-boy-amber.png"),
 }
 
 # Characters that mean something in Markdown. Player names are typed by players,
@@ -41,17 +46,18 @@ def apply_theme():
       letter-spacing: .035em; text-shadow: 0 1px 0 #ffffff66, 0 0 18px rgba(193, 116, 255, .44); }
     h2, h3 { color: #dbbaff !important; }
     [data-testid="stCaptionContainer"], small { color: #d0bedf !important; }
-    /* Forms stay pale so typed answers and names are always easy to read. */
-    [data-baseweb="input"] > div, [data-baseweb="select"] > div, [data-baseweb="base-input"] {
-      background: #f8f4fc !important; border-color: #d6b7eb !important; color: #1d102a !important;
+    /* Dark glass fields keep every typed answer bright and readable. */
+    [data-baseweb="input"] > div, [data-baseweb="select"] > div, [data-baseweb="base-input"], [data-baseweb="textarea"] {
+      background: rgba(40, 17, 79, .92) !important; border-color: #b982e4 !important; color: #f8f2ff !important;
     }
-    input, textarea, [data-baseweb="input"] input, [data-baseweb="textarea"] textarea {
-      color: #1d102a !important; -webkit-text-fill-color: #1d102a !important; caret-color: #551f78 !important;
+    input, textarea, [data-baseweb="input"] input, [data-baseweb="textarea"] textarea,
+    [data-baseweb="select"] input, [data-baseweb="select"] div, [data-baseweb="select"] span {
+      color: #f8f2ff !important; -webkit-text-fill-color: #f8f2ff !important; caret-color: #ffffff !important;
     }
-    input::placeholder, textarea::placeholder { color: #786881 !important; opacity: 1 !important; }
+    input::placeholder, textarea::placeholder { color: #d8c6e8 !important; opacity: 1 !important; }
     input:-webkit-autofill, textarea:-webkit-autofill {
-      -webkit-text-fill-color: #1d102a !important;
-      -webkit-box-shadow: 0 0 0 1000px #f8f4fc inset !important;
+      -webkit-text-fill-color: #f8f2ff !important;
+      -webkit-box-shadow: 0 0 0 1000px #28114f inset !important;
       transition: background-color 9999s ease-in-out 0s;
     }
     div.stButton > button, div.stFormSubmitButton > button {
@@ -62,12 +68,19 @@ def apply_theme():
     [data-baseweb="tab"] { color: #dac9e8 !important; background: rgba(19, 8, 39, .42); border-radius: 10px 10px 0 0; }
     [data-baseweb="tab"][aria-selected="true"] { color: #fff !important; background: rgba(128, 68, 177, .55); }
     hr { border-color: rgba(220, 184, 255, .32) !important; }
+    /* Shared announcements use a luminous glass panel rather than Streamlit gray. */
+    [data-testid="stAlert"] { background: linear-gradient(105deg, rgba(104, 48, 173, .82), rgba(31, 92, 166, .74)) !important;
+      border: 1px solid rgba(177, 234, 255, .72) !important; border-radius: 15px !important;
+      box-shadow: 0 0 24px rgba(172, 92, 255, .30), inset 0 0 28px rgba(170, 224, 255, .10) !important; }
+    [data-testid="stAlert"] * { color: #fcf8ff !important; }
     .mm-wordmark-wrap { margin: .2rem 0 .45rem; text-align: center; overflow: visible; }
     .mm-wordmark { margin-top: .05rem; font-family: Cinzel, Georgia, serif;
       font-size: clamp(1.7rem, 5.6vw, 4.15rem); font-weight: 900; letter-spacing: .045em; line-height: 1.06;
-      text-align: center; text-transform: uppercase; white-space: nowrap; background: linear-gradient(180deg, #ffffff 4%, #f8f9fc 20%, #d9dce5 44%, #ffffff 64%, #c8ccd6 100%);
+      text-align: center; text-transform: uppercase; white-space: nowrap; background: linear-gradient(180deg, #ffffff 2%, #e4bcff 26%, #87f1ff 56%, #dca7ff 82%, #ffffff 100%);
       -webkit-background-clip: text; background-clip: text; color: transparent;
-      -webkit-text-stroke: .35px #f7f8ff; text-shadow: 1px 1px 0 #646b7b, 2px 3px 0 #171123, 0 6px 18px rgba(2, 0, 8, .92); }
+      -webkit-text-stroke: .35px #f7eaff; text-shadow: 0 0 5px rgba(255,255,255,.95), 0 0 18px rgba(205,116,255,.95), 0 0 38px rgba(89,220,255,.68), 2px 3px 0 #271247; }
+    @media (max-width: 560px) { .mm-wordmark { white-space: normal; font-size: 2.15rem; line-height: 1.1; }
+      .mm-tagline { font-size: .78rem !important; letter-spacing: .05em !important; } }
     .mm-tagline { color: #d7b9ee !important; font-family: Georgia, serif; font-size: 1.1rem; letter-spacing: .08em; text-align: center; }
     .mm-avatar-help { color: #d9c2ec !important; margin: .15rem 0 .65rem; }
     .mm-profile { text-align: center; min-width: 120px; }
@@ -96,6 +109,10 @@ def apply_theme():
     .mm-lobby-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1rem; align-items:stretch; margin:1rem 0; }
     .mm-lobby-card { background:rgba(38,16,68,.44); border:1px solid rgba(194,199,212,.24); border-radius:16px; min-height:180px; padding:.85rem .45rem .6rem; }
     .mm-lobby-badges { color:#d6b7eb; font-size:.78rem; margin-top:.35rem; text-align:center; }
+    .mm-remove-button button { background:rgba(116, 19, 42, .72) !important; border:1px solid #ff8592 !important; border-radius:9px !important;
+      box-shadow:none !important; color:#ffd8dd !important; font-family:Cinzel, Georgia, serif !important; font-size:1.1rem !important;
+      line-height:1 !important; min-height:30px !important; padding:.12rem .52rem !important; }
+    .mm-remove-button button:hover { background:#b42f4a !important; color:#fff !important; }
     @media (max-width: 560px) { .mm-duel { gap:.45rem; padding:.7rem .35rem; } .mm-profile-photo { width:94px; height:94px; } .mm-results-grid { grid-template-columns:1fr 1fr; gap:.65rem; } }
     </style>
     """, unsafe_allow_html=True)
@@ -109,32 +126,57 @@ def show_wordmark():
     )
 
 
-def avatar_picker(key):
-    """Clickable glass portrait cards, saved in this phone until the form is sent."""
+def avatar_picker(key, unavailable=()):
+    """A compact, picture-only detective picker.
+
+    The whole portrait is a link, instead of hiding a Streamlit button over an
+    image. That keeps the target reliably clickable across Streamlit versions.
+    """
+    from screens import avatars          # imported here: avatars.py itself uses this file
+
     choice_key = f"{key}_choice"
-    if choice_key not in st.session_state:
-        st.session_state[choice_key] = "girl"
-    st.markdown("<div class='mm-avatar-help'>Choose your detective — tap a whole portrait card.</div>", unsafe_allow_html=True)
+    query_key = f"{key}_avatar"
+    unavailable = set(unavailable)
+    picked_from_link = st.query_params.get(query_key)
+    if picked_from_link in AVATARS and picked_from_link not in unavailable:
+        st.session_state[choice_key] = picked_from_link
+    if choice_key not in st.session_state or st.session_state[choice_key] in unavailable:
+        st.session_state[choice_key] = next((option for option in AVATARS if option not in unavailable), "girl")
     options = list(AVATARS)
-    for start in range(0, len(options), 2):
-        columns = st.columns(2)
-        for column, option in zip(columns, options[start:start + 2]):
-            label, path = AVATARS[option]
-            widget_key = f"{key}_{option}"
-            selected = st.session_state[choice_key] == option
-            selector = f".st-key-{widget_key} div.stButton > button"
-            selected_style = "outline:3px solid #9be4ff !important; outline-offset:2px; box-shadow:0 0 24px rgba(155,228,255,.58) !important;" if selected else ""
-            st.markdown(f"""<style>
-            {selector} {{ background: linear-gradient(rgba(30,14,58,.12), rgba(30,14,58,.55)), url('{avatar_data_url(path)}') center 12px / auto 142px no-repeat, rgba(255,255,255,.08) !important;
-              border:1px solid rgba(226,183,255,.72) !important; border-radius:18px !important; min-height:190px; padding:158px .3rem .4rem !important;
-              transition:transform .15s ease, box-shadow .15s ease; {selected_style} }}
-            {selector}:hover {{ transform:translateY(-4px); box-shadow:0 0 22px rgba(203,151,255,.55) !important; }}
-            {selector} p {{ color:#f8f2ff !important; font-weight:800; font-size:.78rem; }}
-            </style>""", unsafe_allow_html=True)
-            with column:
-                if st.button(("✓ " if selected else "") + label, key=widget_key, width="stretch"):
-                    st.session_state[choice_key] = option
-                    st.rerun()
+    chosen = st.session_state[choice_key]
+
+    css = """
+    <style>
+    .mm-avatar-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:.7rem; }
+    .mm-avatar-choice { display:block; position:relative; aspect-ratio:1 / 1; overflow:hidden; border-radius:14px;
+      background:radial-gradient(circle at 50% 30%, #4b2a86, #1d1438 75%); border:2px solid transparent;
+      transition:transform .15s ease, box-shadow .15s ease; }
+    .mm-avatar-choice:hover { transform:translateY(-3px); border-color:#b57bff; box-shadow:0 0 16px rgba(181,123,255,.5); }
+    .mm-avatar-choice--selected { border-color:#9be4ff; box-shadow:0 0 16px rgba(155,228,255,.55); }
+    .mm-avatar-choice--selected::after { content:'✓'; position:absolute; top:5px; right:9px; color:#9be4ff;
+      font:bold 1.35rem Arial,sans-serif; text-shadow:0 0 6px #000; }
+    .mm-avatar-choice--taken { cursor:not-allowed; }
+    .mm-avatar-choice--taken::before { content:''; position:absolute; inset:0; z-index:1;
+      background:rgba(54, 22, 94, .66); box-shadow:inset 0 0 32px rgba(8, 3, 20, .65); }
+    .mm-avatar-choice img { width:100%; height:100%; object-fit:contain; display:block; }
+    @media (max-width:560px) { .mm-avatar-grid { gap:.42rem; } }
+    </style>
+    """
+    params = {name: st.query_params.get(name) for name in ("code", "me") if st.query_params.get(name)}
+    cards = []
+    for option in options:
+        label, path = AVATARS[option]
+        picture = avatars.thumbnail(path, 200)
+        classes = "mm-avatar-choice" + (" mm-avatar-choice--selected" if option == chosen else "")
+        if option in unavailable:
+            cards.append(f'<span class="{classes} mm-avatar-choice--taken" aria-label="{html.escape(label)} taken">'
+                         f'<img src="{picture}" alt="" /></span>')
+            continue
+        href_params = {**params, query_key: option}
+        cards.append(f'<a class="{classes}" href="?{urlencode(href_params)}" aria-label="Choose {html.escape(label)}">'
+                     f'<img src="{picture}" alt="" /></a>')
+    st.markdown("<div class='mm-label'>Choose your detective</div>" + css +
+                "<div class='mm-avatar-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
     return st.session_state[choice_key]
 
 

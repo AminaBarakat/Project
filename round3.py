@@ -31,11 +31,13 @@ CLUES = (
 SOLUTION = {"suspect": "Nova", "room": "Conservatory", "object": "Map"}
 FINAL_CODE = "318"
 STORY = (
-    "Detective, the earlier games were security tests inside the mansion.\n\n"
-    "During the final blackout, someone stole the Star Key.\n\n"
-    "Find the thief, the hiding place, and the final vault code."
+    "Detective, the earlier games were security tests\n"
+    "inside the mansion.\n"
+    "During the final blackout, someone stole\n"
+    "the Moonstone Key.\n"
+    "Find the thief, hiding place, and vault code."
 )
-FINAL_QUESTION = "…Who do you think is the culprit?"
+FINAL_QUESTION = "…Who took the Moonstone Key?"
 
 
 def new_round(finalists, now):
@@ -93,8 +95,8 @@ def start_investigation(tour, player_id, now):
     return new, "The final investigation has begun!"
 
 
-def answer(tour, player_id, suspect, room, object_name, now):
-    """Record one finalist's theory. A complete correct theory wins at once."""
+def answer(tour, player_id, suspect, room, object_name, now, vault_code=FINAL_CODE):
+    """Record one finalist's theory. The correct theory and vault code win."""
     if tour.get("status") != "round3":
         return tour, "The final mystery is not open right now."
     if not is_finalist(tour, player_id):
@@ -114,9 +116,11 @@ def answer(tour, player_id, suspect, room, object_name, now):
     guess = {"suspect": suspect, "room": room, "object": object_name, "at": now}
     new["round3"]["guesses"][player_id].append(guess)
 
-    if _score_guess(guess) == len(SOLUTION):
+    if _score_guess(guess) == len(SOLUTION) and str(vault_code).strip() == FINAL_CODE:
         _record_winner(new, player_id, "solved the mystery", now)
-        return new, f"✅ You solved it! The final code is {FINAL_CODE}."
+        return new, "✅ You solved it and opened the Moonstone Vault!"
+    if _score_guess(guess) == len(SOLUTION):
+        return new, "Not quite. Your theory is right, but the vault code did not open the lock."
     return new, "Not quite. Check the clues and try another theory."
 
 
