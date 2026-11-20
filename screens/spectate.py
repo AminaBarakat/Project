@@ -126,6 +126,44 @@ STYLE = f"""<style>
 .mm-crowd-left {{ background: linear-gradient(90deg, {art.PURPLE}, #c9a6ff); }}
 .mm-crowd-right {{ background: linear-gradient(90deg, #bdefff, {ICE}); }}
 .mm-crowd-none {{ flex: 1 1 auto; text-align: center; color: {art.SILVER}99; font-size: .78rem; font-style: italic; }}
+.mm-crowd-r2 {{ padding: 1rem clamp(.6rem,2.5vw,1.8rem) 1.1rem; border-radius: 22px; }}
+.mm-crowd-r2 .mm-crowd-title {{ font-size: clamp(.8rem,1.5vw,1.05rem); margin-bottom: .9rem; }}
+.mm-crowd-r2-matchup {{ display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr);
+                        align-items: center; gap: clamp(.4rem,2.5vw,2rem); max-width: 1420px; margin: 0 auto; }}
+.mm-crowd-r2-team {{ min-width: 0; padding: .85rem .6rem .75rem; text-align: center;
+                     border: 1px solid {art.SILVER}44; border-radius: 18px;
+                     background: linear-gradient(145deg,rgba(87,45,133,.48),rgba(20,13,42,.7));
+                     box-shadow: 0 0 18px rgba(143,105,255,.16); }}
+.mm-crowd-r2-team-label {{ color: #e7d2ff; font-family: Cinzel,Georgia,serif; font-size: .86rem;
+                           font-weight: 900; letter-spacing: .12em; margin-bottom: .65rem; }}
+.mm-crowd-r2-faces {{ display: flex; align-items: flex-start; justify-content: center;
+                      gap: clamp(.35rem,1.5vw,1rem); }}
+.mm-crowd-r2-player {{ display: flex; flex: 1 1 0; min-width: 0; flex-direction: column; align-items: center;
+                       color: {art.IVORY}; font-size: clamp(.72rem,1.2vw,.98rem); font-weight: 800; }}
+.mm-crowd-r2-player img {{ width: clamp(72px,9.5vw,136px); height: clamp(72px,9.5vw,136px);
+                           border: 3px solid {art.SILVER}aa; border-radius: 50%; object-fit: contain;
+                           background: #291345; box-shadow: 0 0 16px rgba(181,137,255,.32); }}
+.mm-crowd-r2-name {{ max-width: 100%; margin-top: .35rem; overflow-wrap: anywhere; }}
+.mm-crowd-r2-vs {{ color: #f5edff; font-family: Cinzel,Georgia,serif; font-size: clamp(2.2rem,6vw,5rem);
+                   font-weight: 900; letter-spacing: .04em; text-shadow: 0 0 10px #c4a0ff,0 0 26px #8c49df; }}
+.mm-crowd-r2-votes {{ max-width: 1000px; margin: .65rem auto 0; text-align: center;
+                      color: {art.SILVER}; font-size: .8rem; font-weight: 800; }}
+.mm-crowd-r2-vote-counts {{ display: flex; justify-content: space-between; margin-bottom: .25rem; }}
+.mm-crowd-r2-vote-track {{ display: flex; height: 12px; overflow: hidden; border-radius: 8px; background: #ffffff18; }}
+.mm-crowd-r2-vote-track div {{ min-width: 0; transition: width .8s ease; }}
+.mm-crowd-r2-vote-left {{ background: linear-gradient(90deg, {art.PURPLE}, #c9a6ff); }}
+.mm-crowd-r2-vote-right {{ background: linear-gradient(90deg, #bdefff, {ICE}); }}
+@media (max-width: 560px) {{
+  .mm-crowd-r2 {{ padding: .65rem .35rem .75rem; }}
+  .mm-crowd-r2-matchup {{ gap: .3rem; }}
+  .mm-crowd-r2-team {{ padding: .6rem .2rem .55rem; border-radius: 13px; }}
+  .mm-crowd-r2-team-label {{ font-size: .68rem; letter-spacing: .05em; margin-bottom: .45rem; }}
+  .mm-crowd-r2-faces {{ gap: .15rem; }}
+  .mm-crowd-r2-player {{ font-size: .64rem; }}
+  .mm-crowd-r2-player img {{ width: clamp(48px,16vw,78px); height: clamp(48px,16vw,78px); border-width: 2px; }}
+  .mm-crowd-r2-vs {{ font-size: clamp(1.35rem,7vw,2.2rem); }}
+  .mm-crowd-r2-votes {{ font-size: .68rem; }}
+}}
 @media (max-width: 560px) {{ .mm-crowd-side {{ width: 70px; }} .mm-crowd-name {{ max-width: 70px; font-size: .62rem; }}
   .mm-rx-say {{ font-size: .8rem; }} .mm-rx-sticker img {{ width: 44px; height: 44px; }} .mm-rx-tag {{ font-size: .7rem; }} }}
 </style>"""
@@ -161,6 +199,43 @@ def _side(tour, pids):
     return f'<div class="mm-crowd-side"><div class="mm-crowd-faces">{faces}</div><div class="mm-crowd-name">{name}</div></div>'
 
 
+def _large_duo_side(tour, pids, label):
+    players = []
+    for pid in pids:
+        name = html.escape(_name(tour, pid))
+        photo = avatars.picture(rules.find_player(tour, pid), 280)
+        players.append(
+            f'<div class="mm-crowd-r2-player"><img src="{photo}" alt="{name}"/>'
+            f'<span class="mm-crowd-r2-name">{name}</span></div>'
+        )
+    return (f'<div class="mm-crowd-r2-team"><div class="mm-crowd-r2-team-label">{label}</div>'
+            f'<div class="mm-crowd-r2-faces">{"".join(players)}</div></div>')
+
+
+def _round2_crowd_bar(tour, title, left, left_pids, right, right_pids, counts, total):
+    left_count, right_count = counts[left], counts[right]
+    matchup = (
+        '<div class="mm-crowd-r2-matchup">'
+        f'{_large_duo_side(tour, left_pids, "DUO 1")}<div class="mm-crowd-r2-vs">VS</div>'
+        f'{_large_duo_side(tour, right_pids, "DUO 2")}</div>'
+    )
+    if total:
+        share = round(100 * left_count / total)
+        votes = (
+            '<div class="mm-crowd-r2-votes"><div class="mm-crowd-r2-vote-counts">'
+            f'<span>{left_count} call{"s" if left_count != 1 else ""}</span>'
+            f'<span>{right_count} call{"s" if right_count != 1 else ""}</span></div>'
+            '<div class="mm-crowd-r2-vote-track">'
+            f'<div class="mm-crowd-r2-vote-left" style="width:{share}%"></div>'
+            f'<div class="mm-crowd-r2-vote-right" style="width:{100 - share}%"></div>'
+            '</div></div>'
+        )
+    else:
+        votes = '<div class="mm-crowd-r2-votes">No calls yet…</div>'
+    return (f'<div class="mm-crowd mm-crowd-r2"><div class="mm-crowd-title">{title}</div>'
+            f'{matchup}{votes}</div>')
+
+
 def crowd_bar(tour, round_name):
     """Who the spectators back, live: the two choices with a split bar between them."""
     options = sp.call_options(tour, round_name) or sp._decided_options(tour, round_name)
@@ -170,6 +245,8 @@ def crowd_bar(tour, round_name):
     counts = sp.crowd(tour, round_name)
     total = counts[left] + counts[right]
     title = "THE CROWD'S CALL · WHICH DUO OPENS THE VAULT?" if round_name == "round2" else "THE CROWD'S CALL · WHO WINS THE CASE?"
+    if round_name == "round2":
+        return _round2_crowd_bar(tour, title, left, left_pids, right, right_pids, counts, total)
     if total == 0:
         middle = '<div class="mm-crowd-none">No calls yet…</div>'
     else:
