@@ -872,11 +872,12 @@ def vs_intro(you, opponent):
 </div>"""
 
 
-def duel_race(you, opponent):
-    """A slim live strip above each game: you and your opponent racing through the
-    four games. Shows only how far along each of you is, never right or wrong.
-    you / opponent: dict with name, picture, progress (0-4) and status, where status
-    is "playing", "finished" or "left"."""
+def duel_race(you, opponent, *more):
+    """A slim live strip above each game: you and your opponent (or, in the 5-player
+    game, all your rivals) racing through the four games. Shows only how far along
+    each of you is, never right or wrong.
+    you / opponent / more: dict with name, picture, progress (0-4) and status, where
+    status is "playing", "finished" or "left"."""
     alarm = "#ff4d6a"
 
     def lane(who, colour, me):
@@ -911,7 +912,7 @@ def duel_race(you, opponent):
 .mm-race-hot {{ animation: mm-race-hot .9s ease-in-out infinite; }}
 @media (max-width: 560px) {{ .mm-race-who {{ width: 52px; font-size: .7rem; }} .mm-race-note {{ width: 74px; font-size: .62rem; }} }}
 </style>
-<div class="mm-race">{lane(you, f"linear-gradient(90deg,{PURPLE},{TILE_COLOURS['ice']})", True)}{lane(opponent, alarm, False)}</div>"""
+<div class="mm-race">{lane(you, f"linear-gradient(90deg,{PURPLE},{TILE_COLOURS['ice']})", True)}{"".join(lane(rival, alarm, False) for rival in (opponent,) + more)}</div>"""
 
 
 def stamp(text, good=True):
@@ -1027,3 +1028,57 @@ def after_reveal_style(key, delay):
 .st-key-{css_key(key)} {{ animation: mm-after .6s ease-out {delay:.2f}s both; }}
 </style>"""
 
+
+# --- the 5-player game: everyone against everyone ---------------------------------------
+
+def ffa_intro(players):
+    """Before Round 1 with 5 players: all the detectives rise into a line-up one after
+    another, then EVERYONE AGAINST EVERYONE slams down. players: (name, picture, is_me)."""
+    faces = "".join(
+        f'<div class="mm-ffa-p{" mm-ffa-me" if me else ""}" style="animation-delay:{.15 + k * .14:.2f}s">'
+        f'<img src="{picture}" alt=""/><span>{"YOU" if me else _html_mod.escape(name)}</span></div>'
+        for k, (name, picture, me) in enumerate(players))
+    return f"""<style>
+@keyframes mm-ffa-rise {{ from {{ opacity: 0; transform: translateY(40px) scale(.8); }} to {{ opacity: 1; transform: none; }} }}
+@keyframes mm-ffa-slam {{ 0%, 55% {{ opacity: 0; transform: scale(3) rotate(-8deg); }} 75% {{ opacity: 1; transform: scale(.9) rotate(-3deg); }}
+                          100% {{ opacity: 1; transform: scale(1) rotate(-3deg); }} }}
+.mm-ffa {{ position: relative; max-width: 640px; margin: .6rem auto 1rem; padding: 1rem .6rem 1.1rem; border-radius: 20px; text-align: center;
+          background: radial-gradient(ellipse 80% 70% at 50% 100%, #5b2c9a, #1d1438 75%); border: 2px solid {SILVER}55;
+          box-shadow: 0 0 30px {PURPLE}55; overflow: hidden; }}
+.mm-ffa-row {{ display: flex; justify-content: center; gap: .4rem; }}
+.mm-ffa-p {{ flex: 1 1 0; min-width: 0; max-width: 110px; animation: mm-ffa-rise .55s cubic-bezier(.2,.9,.3,1.2) both; }}
+.mm-ffa-p img {{ height: 120px; max-width: 100%; object-fit: contain; filter: drop-shadow(0 6px 12px #000a); }}
+.mm-ffa-p span {{ display: block; margin-top: .2rem; padding: .1rem .3rem; border-radius: 6px; background: #10071fcc; color: {IVORY};
+                 font-weight: 800; font-size: .74rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+.mm-ffa-me span {{ color: {TILE_COLOURS['ice']}; }}
+.mm-ffa-word {{ margin-top: .7rem; font-family: Cinzel, Georgia, serif; font-weight: 900; color: {IVORY}; letter-spacing: .04em;
+               font-size: clamp(1.15rem, 4.6vw, 1.9rem); text-shadow: 0 0 18px {PURPLE}; animation: mm-ffa-slam 1.6s ease-out both; }}
+.mm-ffa-sub {{ color: {SILVER}cc; font-size: .85rem; margin-top: .25rem; animation: mm-ffa-rise .5s 1.4s both; }}
+@media (max-width: 560px) {{ .mm-ffa-p img {{ height: 72px; }} .mm-ffa-p span {{ font-size: .6rem; }} }}
+</style>
+<div class="mm-ffa"><div class="mm-ffa-row">{faces}</div>
+<div class="mm-ffa-word">EVERYONE AGAINST EVERYONE</div>
+<div class="mm-ffa-sub">Fewest right answers (then the slowest) is out. Four go through.</div></div>"""
+
+
+def group_reveal_card(players, delay=None):
+    """The 5-player Round 1 result, revealed like the duels: a drumroll over the whole
+    group, then everyone lights up except the one who is out, who greys out with
+    OFF THE CASE stamped across. players: (name, picture, is_out, is_me) in seat
+    order, so nobody can guess from the order. delay: as in reveal_card."""
+    people = []
+    for name, picture, out, me in players:
+        mark = '<div class="mm-rv-stamp">OFF THE CASE</div>' if out else ""
+        you = ' style="color:#9be4ff"' if me else ""
+        people.append(f'<div class="mm-rv-p {"mm-rv-lose" if out else "mm-rv-win"}">'
+                      f'<div class="mm-rv-photo-wrap"><div class="mm-rv-photo"><img src="{picture}" alt=""/></div>{mark}</div>'
+                      f'<div class="mm-rv-name"{you}>{"You" if me else _html_mod.escape(name)}</div></div>')
+    extra, style, drum = "", "", ""
+    if delay is None:
+        extra = " mm-rv-static"
+    else:
+        drum = '<div class="mm-rv-q"><span>?</span></div>'
+        style = f' style="--d:{delay:.2f}s"'
+    return (f'<div class="mm-rv mm-rv-mine mm-rv-group{extra}"{style}><div class="mm-rv-title">EVERYONE AGAINST EVERYONE · WHO IS OUT?</div>'
+            f'<div class="mm-rv-pair">{"".join(people)}</div>{drum}</div>'
+            '<style>.mm-rv-group { grid-column: 1 / -1; } .mm-rv-group .mm-rv-pair { gap: .2rem; }</style>')
