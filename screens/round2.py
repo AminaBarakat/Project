@@ -1,5 +1,6 @@
 """Round 2 on each phone. Shared progress is re-read from storage every 2 seconds."""
 
+import html
 import math
 import time
 
@@ -11,7 +12,6 @@ import tournament
 from screens import art, common, spectate
 
 REFRESH = "2s"
-LOCKED_IN_SECONDS = 5
 
 def show(code, me):
     # Spectators: crowd bar + reactions at the top, their own buttons at the bottom.
@@ -62,7 +62,45 @@ def _live_round(code, me):
             st.session_state.pop(_feedback_key(code), None)
 
     st.subheader("Your clue card")
-    st.info(view["card"])
+    st.markdown("""
+    <style>
+    .r2-clue-paper {
+      position: relative; margin: .8rem 0 1rem; padding: 1.45rem 1.35rem;
+      border: 2px solid #9a5c2a; border-radius: 22px 15px 20px 14px;
+      color: #432a17;
+      background:
+        radial-gradient(ellipse at 7% 12%, rgba(108,57,20,.2), transparent 23%),
+        radial-gradient(ellipse at 90% 86%, rgba(108,57,20,.18), transparent 21%),
+        repeating-linear-gradient(0deg, transparent 0 31px, rgba(105,67,33,.055) 32px 33px),
+        linear-gradient(100deg, #d7b274 0%, #f2dfb8 11%, #f7eacb 48%, #edd6a7 88%, #cf9f61 100%);
+      box-shadow: 0 9px 22px rgba(0,0,0,.28), inset 0 0 23px rgba(116,68,26,.28);
+    }
+    .r2-clue-paper::before, .r2-clue-paper::after {
+      content: ""; position: absolute; left: 1rem; right: 1rem; height: 9px;
+      border-radius: 50%; pointer-events: none;
+    }
+    .r2-clue-paper::before {
+      top: -7px; border-top: 3px solid rgba(115,65,27,.72);
+      box-shadow: 0 3px 5px rgba(74,42,18,.24);
+    }
+    .r2-clue-paper::after {
+      bottom: -7px; border-bottom: 3px solid rgba(115,65,27,.58);
+    }
+    .r2-clue-paper-text {
+      font-family: Georgia, 'Times New Roman', serif; font-size: 1.08rem;
+      font-weight: 700; line-height: 1.65; white-space: pre-line;
+      text-shadow: 0 1px rgba(255,248,225,.35);
+    }
+    @media(max-width:560px) {
+      .r2-clue-paper { padding: 1.1rem .95rem; }
+      .r2-clue-paper-text { font-size: 1rem; }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    st.markdown(
+        f"<div class='r2-clue-paper' role='note'><div class='r2-clue-paper-text'>{html.escape(view['card'])}</div></div>",
+        unsafe_allow_html=True,
+    )
     st.caption("Read your clue aloud to your teammate. Each phone receives only its player's card.")
 
     locked_until = view.get("locked_until")
@@ -74,10 +112,9 @@ def _live_round(code, me):
     if view["code_solved_at"] is None:
         _code_form(code, me, view["duo_id"])
     else:
-        if 0 <= now - view["code_solved_at"] < LOCKED_IN_SECONDS:
-            _locked_in_banner()
-        else:
-            st.success("Vault code solved. Your teammate sees this progress too.")
+        if st.session_state.pop(_locked_in_key(code), False):
+            st.markdown(art.stamp("LOCKED IN"), unsafe_allow_html=True)
+        st.success("Vault code solved. Your teammate sees this progress too.")
         _map(code, me, view)
 
     st.info("The other duo is still in the challenge. First to reach the Rooftop advances.")
@@ -142,40 +179,16 @@ def _feedback_key(code):
     return f"r2_{code}_feedback"
 
 
-def _locked_in_banner():
-    st.markdown("""
-    <style>
-    @keyframes r2-lock-pop {
-      0% { opacity: 0; transform: scale(.78) translateY(8px); }
-      65% { opacity: 1; transform: scale(1.04) translateY(0); }
-      100% { opacity: 1; transform: scale(1); }
-    }
-    .r2-locked-in {
-      animation: r2-lock-pop .48s cubic-bezier(.2,.8,.25,1) both;
-      border: 2px solid #70f5ff; border-radius: 14px; margin: .6rem auto 1rem;
-      max-width: 560px; padding: .85rem 1rem; text-align: center;
-      background: linear-gradient(115deg, rgba(32,14,61,.94), rgba(58,22,91,.94));
-      box-shadow: 0 0 8px #42efff, 0 0 20px rgba(89,224,255,.8),
-                  0 0 34px rgba(192,83,255,.55), inset 0 0 18px rgba(112,245,255,.15);
-      color: #f8f2ff; font-family: ui-sans-serif, system-ui, sans-serif;
-    }
-    .r2-locked-in strong {
-      display: block; color: #eaffff; font-family: Cinzel, Georgia, serif;
-      font-size: clamp(1.25rem, 3.4vw, 1.8rem); letter-spacing: .17em;
-      text-shadow: 0 0 5px #70f5ff, 0 0 14px #32dfff, 0 0 24px #c665ff;
-    }
-    .r2-locked-in span { color: #eadbff; display: block; margin-top: .2rem; }
-    </style>
-    <div class="r2-locked-in" role="status" aria-live="polite">
-      <strong>✦ LOCKED IN ✦</strong>
-      <span>Your vault code has been recorded.</span>
-    </div>
-    """, unsafe_allow_html=True)
+def _locked_in_key(code):
+    return f"r2_{code}_locked_in"
 
 
 def _show_feedback(code, message):
     if message.startswith(("Vault unlocked", "Safe choice", "Rooftop reached")):
         if message.startswith("Vault unlocked"):
+            # A local, one-shot stamp for the player who submitted the solved code.
+            # art.stamp fades out after 1.4 seconds, like Round 1.
+            st.session_state[_locked_in_key(code)] = True
             st.session_state.pop(_feedback_key(code), None)
             st.rerun(scope="fragment")
         kind = "success"
