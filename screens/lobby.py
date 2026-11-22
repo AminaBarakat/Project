@@ -163,7 +163,14 @@ STYLE = f"""<style>
 @media (max-width: 560px) {{
   .mm-seat {{ width: 72px; }} .mm-seat .mm-face {{ width: 48px; height: 48px; font-size: 1.1rem; }}
   .mm-seat span {{ font-size: .62rem; }} .mm-table b {{ font-size: 1.7rem; }} .mm-table small {{ font-size: .55rem; }}
-  .mm-code b {{ font-size: 1.35rem; }} .mm-lobby-tag {{ letter-spacing: .08em; font-size: .66rem; }} .mm-bubble {{ max-width: 120px; font-size: .64rem; }} }}
+  .mm-code b {{ font-size: 1.35rem; }} .mm-lobby-tag {{ letter-spacing: .08em; font-size: .66rem; }} .mm-bubble {{ max-width: 120px; font-size: .64rem; }}
+  /* On a phone Streamlit stacks these columns. Give each lobby section room
+     to breathe rather than making the riddle, greetings, and guide touch. */
+  .st-key-mm_riddle_section, .st-key-mm_hello_section {{ margin-bottom: 1.15rem; }}
+  .mm-box {{ margin-bottom: 1.15rem; }}
+  .st-key-mm_hello {{ margin-top: .35rem; }}
+  .mm-feed {{ margin-top: .7rem; line-height: 1.7; }}
+}}
 </style>"""
 
 
@@ -213,19 +220,20 @@ def show(code, me):
 
     riddle_col, hello_col = st.columns(2)
     with riddle_col:
-        index = _riddle_index(now)
-        question, answer = RIDDLES[index]
-        # Every new riddle must start with its answer hidden. A browser keeps an opened
-        # "Tap to reveal" box open if the page only swaps the text inside it, so each
-        # riddle gets its own box (own key) and neighbouring riddles use a different
-        # outer element (section / article): the browser then builds a new, closed box.
-        tag = "section" if index % 2 else "article"
-        with st.container(key=f"mm_riddle_{index}"):
-            st.markdown(f"<{tag} class='mm-box'><h4>WARM-UP RIDDLE</h4><div class='mm-riddle'>{question}</div>"
-                        f"<details><summary>Tap to reveal</summary><b>{answer}</b></details></{tag}>",
-                        unsafe_allow_html=True)
+        with st.container(key="mm_riddle_section", border=False):
+            index = _riddle_index(now)
+            question, answer = RIDDLES[index]
+            # Every new riddle must start with its answer hidden. A browser keeps an opened
+            # "Tap to reveal" box open if the page only swaps the text inside it, so each
+            # riddle gets its own box (own key) and neighbouring riddles use a different
+            # outer element (section / article): the browser then builds a new, closed box.
+            tag = "section" if index % 2 else "article"
+            with st.container(key=f"mm_riddle_{index}"):
+                st.markdown(f"<{tag} class='mm-box'><h4>WARM-UP RIDDLE</h4><div class='mm-riddle'>{question}</div>"
+                            f"<details><summary>Tap to reveal</summary><b>{answer}</b></details></{tag}>",
+                            unsafe_allow_html=True)
     with hello_col:
-        with st.container(key="mm_hello_box", border=False):
+        with st.container(key="mm_hello_section", border=False):
             _say_hello(code, tour, me)
     steps = "".join(f"<div><i>{n}</i><span><b>{name}</b> · {what}</span></div>" for n, name, what in STEPS)
     st.markdown(f"<div class='mm-box'><h4>HOW THE NIGHT GOES</h4><div class='mm-steps-list'>{steps}</div>"
