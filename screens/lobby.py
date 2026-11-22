@@ -213,9 +213,17 @@ def show(code, me):
 
     riddle_col, hello_col = st.columns(2)
     with riddle_col:
-        question, answer = RIDDLES[_riddle_index(now)]
-        st.markdown(f"<div class='mm-box'><h4>WARM-UP RIDDLE</h4><div class='mm-riddle'>{question}</div>"
-                    f"<details><summary>Tap to reveal</summary><b>{answer}</b></details></div>", unsafe_allow_html=True)
+        index = _riddle_index(now)
+        question, answer = RIDDLES[index]
+        # Every new riddle must start with its answer hidden. A browser keeps an opened
+        # "Tap to reveal" box open if the page only swaps the text inside it, so each
+        # riddle gets its own box (own key) and neighbouring riddles use a different
+        # outer element (section / article): the browser then builds a new, closed box.
+        tag = "section" if index % 2 else "article"
+        with st.container(key=f"mm_riddle_{index}"):
+            st.markdown(f"<{tag} class='mm-box'><h4>WARM-UP RIDDLE</h4><div class='mm-riddle'>{question}</div>"
+                        f"<details><summary>Tap to reveal</summary><b>{answer}</b></details></{tag}>",
+                        unsafe_allow_html=True)
     with hello_col:
         with st.container(key="mm_hello_box", border=False):
             _say_hello(code, tour, me)

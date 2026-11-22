@@ -177,7 +177,7 @@ def test_escape_route_has_exactly_one_safe_path(house):
 
 @pytest.mark.parametrize("house", MAPS)
 def test_escape_route_is_short(house):
-    assert 3 <= len(house["answer"]) <= 4         # 3 or 4 doors, the Exit included
+    assert len(house["answer"]) == 3              # exactly 3 doors, the Exit included
 
 
 def test_there_are_three_house_rules():
@@ -297,9 +297,9 @@ def first_limit(tour, pid="p0"):
 
 
 def test_every_game_has_its_own_short_timer():
-    assert r1.GAME_TIMES == {"pattern": 15, "memory": 25, "number_lock": 30, "escape_route": 40}
+    assert r1.GAME_TIMES == {"pattern": 15, "memory": 25, "number_lock": 30, "escape_route": 30}
     assert r1.MEMORY_SHOW_SECONDS == 5 and r1.TIEBREAK_SECONDS == 15
-    assert sum(r1.GAME_TIMES.values()) <= 110     # the whole of Round 1 fits in about 2 minutes
+    assert sum(r1.GAME_TIMES.values()) <= 100     # all four games together: under 2 minutes
 
 
 def test_intro_then_the_first_game_with_its_own_timer():

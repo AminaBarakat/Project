@@ -152,6 +152,24 @@ def choose_door(tour, player_id, duo_id, destination, now, rng=None):
     return new, f"Safe choice. You reached {destination}."
 
 
+def share_clue(tour, player_id, now):
+    """The clue holder sends their clue to their teammate's phone. Only the holder
+    can do this (their own card), once, while Round 2 is being played."""
+    round_state = tour.get("round2") or {}
+    if tour.get("status") != "round2" or round_state.get("winner") is not None:
+        return tour, "Round 2 is not active."
+    assignment = round_state.get("players", {}).get(player_id)
+    if not assignment:
+        return tour, "You're not playing in Round 2."
+    if _challenge_started_at(round_state) is None:
+        return tour, "The Round 2 challenge hasn't started yet."
+    if assignment.get("shared_at") is not None:
+        return tour, "You've already sent your clue."
+    new = copy.deepcopy(tour)
+    new["round2"]["players"][player_id]["shared_at"] = now
+    return new, "Clue sent to your teammate!"
+
+
 def prepare_round(tour, now, rng=None):
     """Migrate older Round 2 states and settle any expired challenge."""
     round_state = tour.get("round2")
@@ -246,10 +264,15 @@ def player_view(tour, player_id):
     duo = round_state["duos"][duo_id]
     teammate_id = next(pid for pid in duo["players"] if pid != player_id)
     teammate = next((p for p in tour.get("players", []) if p["id"] == teammate_id), None)
+    teammate_assignment = round_state["players"].get(teammate_id, {})
     challenge_started_at = _challenge_started_at(round_state)
     view.update({
         "duo_id": duo_id,
         "card": CARD_A if assignment["card"] == "A" else CARD_B,
+        "card_shared": assignment.get("shared_at") is not None,
+        # The teammate's clue, but only once the teammate chose to send it.
+        "teammate_card": ((CARD_A if teammate_assignment.get("card") == "A" else CARD_B)
+                          if teammate_assignment.get("shared_at") is not None else None),
         "teammate": copy.deepcopy(teammate),
         "code_solved_at": duo["code_solved_at"],
         "route_step": duo["route_step"],

@@ -95,8 +95,11 @@ def _live_round(code, me):
 
     if view["code_solved_at"] is None:
         st.subheader("Your clue card")
-        _clue_card(code, me, view["card"])
-        st.caption("Read your clue aloud to your teammate. Each phone receives only its player's card.")
+        if _clue_card(code, me, view["card"]):
+            _share_button(code, me, view)          # the clue holder decides when to send it
+        _teammate_clue(view)
+        st.caption("Open your card, then send your clue to your teammate when you're ready. "
+                   "Each phone only receives its own card until it's sent.")
         _code_form(code, me, view["duo_id"])
     else:
         if st.session_state.pop(_locked_in_key(code), False):
@@ -251,7 +254,7 @@ def _clue_card(code, me, clue):
         if st.button("Tap here", key=button_key, width="stretch"):
             st.session_state[revealed_key] = True
             st.rerun(scope="fragment")
-        return
+        return False
 
     st.markdown(
         "<section class='r2-clue-card' role='group' aria-label='Your revealed clue'>"
@@ -261,6 +264,45 @@ def _clue_card(code, me, clue):
         "<div class='r2-card-corner r2-card-corner-bottom'>C<br><span>♥</span></div>"
         "<div class='r2-card-footer'>Keep this clue secret</div>"
         "</section>",
+        unsafe_allow_html=True,
+    )
+    return True
+
+
+def _teammate_name(view):
+    teammate = view.get("teammate")
+    return common.player_label(teammate) if teammate else "your teammate"
+
+
+def _share_button(code, me, view):
+    """Under your opened card: send your clue to your teammate's phone (once)."""
+    name = _teammate_name(view)
+    if view.get("card_shared"):
+        st.caption(f"✓ Sent: {name} can see your clue on their phone.")
+        return
+    if st.button(f"Send my clue to {name}", key=f"r2_{code}_share_clue", type="primary", width="stretch"):
+        _, message = storage.update(code, rules.share_clue, me, time.time())
+        st.toast(message)
+        st.rerun(scope="fragment")
+
+
+def _teammate_clue(view):
+    """Your teammate's clue, once they've chosen to send it to you."""
+    name = _teammate_name(view)
+    clue = view.get("teammate_card")
+    if not clue:
+        st.caption(f"Waiting for {name} to send you their clue…")
+        return
+    st.markdown(
+        "<section class='r2-clue-card r2-clue-card-mate' role='group' aria-label='Your teammate’s clue'>"
+        "<div class='r2-card-corner'>C<br><span>♠</span></div>"
+        "<div class='r2-card-front-label'>Teammate's clue</div>"
+        f"<p class='r2-card-front-clue'>{html.escape(clue)}</p>"
+        "<div class='r2-card-corner r2-card-corner-bottom'>C<br><span>♠</span></div>"
+        f"<div class='r2-card-footer'>From {html.escape(view['teammate']['name'] if view.get('teammate') else 'your teammate')}</div>"
+        "</section>"
+        "<style>.r2-clue-card-mate { border-color: #9be4ff !important; background: #e3eef3 !important;"
+        " box-shadow: 0 0 22px rgba(155,228,255,.6), inset 0 0 0 5px rgba(255,255,255,.34) !important; }</style>",
         unsafe_allow_html=True,
     )
 

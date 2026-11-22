@@ -683,7 +683,12 @@ def lock_style(key, digits=4):
       color: {TILE_COLOURS['ice']} !important; -webkit-text-fill-color: {TILE_COLOURS['ice']} !important;
       caret-color: {PURPLE} !important; background: transparent !important; padding: .2em 0 !important; }}
 {c} input::placeholder {{ color: #5d5480 !important; -webkit-text-fill-color: #5d5480 !important; opacity: 1 !important; }}
-{c} div.stFormSubmitButton > button {{ width: 100%; margin-top: .6rem; }}
+/* The Unlock button sits in the middle of the lock. Streamlit wraps it in a box only as wide
+   as the button, so that box is stretched to the lock's width and centres the button. */
+{c} [data-testid="stElementContainer"]:has([data-testid="stFormSubmitButton"]),
+{c} .stElementContainer:has(.stFormSubmitButton) {{ width: 100% !important; display: flex !important; justify-content: center !important; }}
+{c} div.stFormSubmitButton, {c} [data-testid="stFormSubmitButton"] {{ display: flex !important; justify-content: center !important; width: 100% !important; }}
+{c} div.stFormSubmitButton > button {{ width: auto !important; min-width: 140px; margin: .6rem auto 0 !important; }}
 {c} [data-testid="stWidgetLabel"] {{ justify-content: center; }}
 {c} [data-testid="stWidgetLabel"] p, {c} label {{ color: {BG} !important; font-weight: 700 !important; }}
 </style>"""
