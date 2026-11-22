@@ -75,7 +75,9 @@ def _redraw_at(when, text):
     """A small countdown; redraws the whole page once `when` has passed."""
     left = int(when - time.time() + 0.999)
     if left <= 0:
-        st.rerun()
+        # A fragment rerun would only redraw this countdown.  The next game needs
+        # the complete page to run again so `show()` can choose the new phase.
+        st.rerun(scope="app")
     st.markdown(f"### {text.format(left)}")
 
 
@@ -95,7 +97,7 @@ def _live_strip(code, me, moments):
     page once one of the moments has passed. It has no buttons, so taps in the game
     below can't get lost."""
     if time.time() >= min(moments):
-        st.rerun()
+        st.rerun(scope="app")
     tour = live.peek(code)
     if tour is None or me not in tour["round1"]["players"]:
         return
@@ -161,7 +163,7 @@ def _waiting_room(code, me):
     now = time.time()
     tour = _load_settled(code, now, quick=True)
     if tour is None or r1.phase(tour, me, now) != "waiting":
-        st.rerun()                            # results are in, a tie-breaker opened, …
+        st.rerun(scope="app")                 # results are in, a tie-breaker opened, …
     _waiting(tour, code, me, now)
 
 
@@ -171,10 +173,10 @@ def _watch(code, me, phase, moments):
     player's phase has changed (e.g. the tie-breaker was decided)."""
     now = time.time()
     if now >= min(moments):
-        st.rerun()
+        st.rerun(scope="app")
     tour = _load_settled(code, now, quick=True)
     if tour is None or r1.phase(tour, me, now) != phase:
-        st.rerun()
+        st.rerun(scope="app")
 
 
 def _html(markup):
@@ -526,7 +528,7 @@ def _ready_watch(code, seen):
     ready or Round 2 has begun. Draws nothing, so taps can't get lost in it."""
     tour = live.peek(code)
     if tour is None or tour["status"] != "round1_results" or tuple(sorted(r1.ready_players(tour))) != seen:
-        st.rerun()
+        st.rerun(scope="app")
 
 
 def _ready_lineup(code, me):
