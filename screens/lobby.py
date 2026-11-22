@@ -41,9 +41,9 @@ RIDDLES = [
     ("What can you catch but not throw?", "A cold"),
 ]
 
-STEPS = [("1", "Round 1", "four quick puzzles against one rival"),
-         ("2", "Round 2", "two duos race to open the vault"),
-         ("3", "Round 3", "the final two solve the mystery")]
+STEPS = [("1", "Round 1", "Four quick puzzles, against one rival (or, with 5 players, everyone)"),
+         ("2", "Round 2", "Two duos race to open the vault"),
+         ("3", "Round 3", "The final two solve the mystery")]
 
 
 # --- our own small drawings for the greeting buttons ------------------------------------
@@ -203,7 +203,8 @@ def show(code, me):
 
     st.markdown(STYLE, unsafe_allow_html=True)
     common.show_wordmark()
-    st.markdown("<div class='mm-lobby-tag'>EIGHT GUESTS · ONE MANSION · ONE LAST CLUE</div>", unsafe_allow_html=True)
+    guests = "FIVE" if rules.table_size(tour) == 5 else "EIGHT"
+    st.markdown(f"<div class='mm-lobby-tag'>{guests} GUESTS · ONE MANSION · ONE LAST CLUE</div>", unsafe_allow_html=True)
     common.show_flash()
     _code_and_link(code)
     st.markdown(_table(tour, me, now), unsafe_allow_html=True)
@@ -242,8 +243,9 @@ def _table(tour, me, now):
     players = tour["players"]
     bubbles = chat.bubbles(tour, now)
     seats = []
-    for index in range(rules.MAX_PLAYERS):
-        angle = math.radians(-90 + index * 360 / rules.MAX_PLAYERS)
+    size = rules.table_size(tour)              # 5 or 8 seats, as the host chose
+    for index in range(size):
+        angle = math.radians(-90 + index * 360 / size)
         x, y = 50 + 41 * math.cos(angle), 50 + 41 * math.sin(angle)
         where = f"left:{x:.1f}%;top:{y:.1f}%"
         if index < len(players):
@@ -262,8 +264,8 @@ def _table(tour, me, now):
         else:
             seats.append(f"<div class='mm-seat mm-empty' style='{where}'><div class='mm-face'>?</div><span>waiting…</span></div>")
     seated = len(players)
-    middle = (f"<b>{seated}/{rules.MAX_PLAYERS}</b><small>DETECTIVES SEATED</small>" if seated < rules.MAX_PLAYERS
-              else "<b>8/8</b><small>THE TABLE IS FULL</small>")
+    middle = (f"<b>{seated}/{size}</b><small>DETECTIVES SEATED</small>" if seated < size
+              else f"<b>{size}/{size}</b><small>THE TABLE IS FULL</small>")
     return (f"<div class='mm-tablewrap'><div class='mm-table'><div>{middle}</div></div>"
             "<div class='mm-candle' style='left:38%;top:37%'></div><div class='mm-candle' style='left:60%;top:61%;animation-delay:.6s'></div>"
             + "".join(seats) + "</div>")
@@ -308,7 +310,7 @@ def _say_hello(code, tour, me):
 def _start_or_wait(code, tour, me):
     count = len(tour["players"])
     if rules.is_host(tour, me):
-        missing = rules.MAX_PLAYERS - count
+        missing = rules.table_size(tour) - count
         label = "Start the tournament" if missing == 0 else (
             f"Start · waiting for {missing} more player{'s' if missing != 1 else ''}")
         with st.container(key="mm_start"):

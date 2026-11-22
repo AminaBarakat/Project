@@ -141,7 +141,7 @@ def normalise_code(code):
     return (code or "").strip().upper()
 
 
-def create(host_name, path=DB_PATH, appearance=None):
+def create(host_name, path=DB_PATH, appearance=None, size=rules.MAX_PLAYERS):
     """Creates a new tournament with a fresh join code.
     Returns (tournament, host_id, message); tournament is None if refused."""
     host_id = new_player_id()
@@ -150,7 +150,7 @@ def create(host_name, path=DB_PATH, appearance=None):
     if _supabase is not None and path == DB_PATH:
         while True:
             code = "".join(secrets.choice(CODE_LETTERS) for _ in range(CODE_LENGTH))
-            tour, message = rules.new_tournament(code, host_id, host_name, appearance)
+            tour, message = rules.new_tournament(code, host_id, host_name, appearance, size)
             if tour is None:
                 return None, None, message
             if _supabase.create(tour):
@@ -163,7 +163,7 @@ def create(host_name, path=DB_PATH, appearance=None):
             code = "".join(secrets.choice(CODE_LETTERS) for _ in range(CODE_LENGTH))
             if not conn.execute("SELECT 1 FROM tournaments WHERE code = ?", (code,)).fetchone():
                 break
-        tour, message = rules.new_tournament(code, host_id, host_name, appearance)
+        tour, message = rules.new_tournament(code, host_id, host_name, appearance, size)
         if tour is None:
             conn.execute("ROLLBACK")
             return None, None, message
