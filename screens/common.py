@@ -149,8 +149,15 @@ def avatar_picker(key, unavailable=()):
     .mm-avatar-taken::before { content:''; position:absolute; inset:0; z-index:1;
       background:rgba(54, 22, 94, .66); box-shadow:inset 0 0 32px rgba(8, 3, 20, .65); }
     .mm-avatar-taken img { width:100%; height:100%; object-fit:contain; display:block; }
+    /* Streamlit normally stacks columns on a phone. Detective portraits are small,
+       tap-friendly choices, so keep the four-card row intact instead. */
+    @media (max-width: 640px) {
+      .st-key-PICKER [data-testid="stHorizontalBlock"] { flex-wrap:nowrap !important; gap:.42rem !important; }
+      .st-key-PICKER [data-testid="stColumn"] { flex:1 1 0 !important; min-width:0 !important; width:0 !important; }
+    }
     </style>
     """
+    css = css.replace("PICKER", f"{key}_picker")
     card_styles = []
     cards = []
     for option in options:
@@ -177,19 +184,20 @@ def avatar_picker(key, unavailable=()):
         """)
         cards.append((card_key, (label, option), None))
 
-    st.markdown("<div class='mm-label'>Choose your detective</div>" + css + "<style>" + "".join(card_styles) + "</style>",
-                unsafe_allow_html=True)
-    for row_start in range(0, len(cards), 4):
-        for column, (card_key, button, taken_html) in zip(st.columns(4), cards[row_start:row_start + 4]):
-            with column:
-                with st.container(key=card_key):
-                    if taken_html:
-                        st.markdown(taken_html, unsafe_allow_html=True)
-                    else:
-                        label, option = button
-                        if st.button(label, key=f"{key}_choose_{option}", width="stretch"):
-                            st.session_state[choice_key] = option
-                            st.rerun()
+    with st.container(key=f"{key}_picker"):
+        st.markdown("<div class='mm-avatar-picker'><div class='mm-label'>Choose your detective</div>" + css +
+                    "<style>" + "".join(card_styles) + "</style></div>", unsafe_allow_html=True)
+        for row_start in range(0, len(cards), 4):
+            for column, (card_key, button, taken_html) in zip(st.columns(4), cards[row_start:row_start + 4]):
+                with column:
+                    with st.container(key=card_key):
+                        if taken_html:
+                            st.markdown(taken_html, unsafe_allow_html=True)
+                        else:
+                            label, option = button
+                            if st.button(label, key=f"{key}_choose_{option}", width="stretch"):
+                                st.session_state[choice_key] = option
+                                st.rerun()
     return st.session_state[choice_key]
 
 
