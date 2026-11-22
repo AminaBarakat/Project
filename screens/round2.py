@@ -192,42 +192,60 @@ def _clue_card(code, me, clue):
     <style>
     .st-key-{button_key} {{ max-width: 520px; margin: .75rem auto 1rem; }}
     .st-key-{button_key} div.stButton > button {{
-      min-height: 320px; border: 3px solid #9d55ff !important; border-radius: 18px !important;
-      color: #fff !important; font-size: 1.25rem !important; font-weight: 900 !important;
-      letter-spacing: .14em; text-shadow: 0 2px 8px #10071f;
-      background:
-        radial-gradient(ellipse 42% 46% at 50% 50%, #34366f 0 80%, transparent 82%),
-        linear-gradient(135deg, #32164e, #302b69 57%, #172e5b) !important;
-      box-shadow: 0 0 18px rgba(159,85,255,.48), inset 0 0 22px rgba(186,142,255,.2);
+      min-height: 320px; position:relative; overflow:hidden;
+      border: 3px solid #e1a6ff !important; border-radius: 24px !important;
+      color: #3e245e !important; font-size: 1.2rem !important; font-weight: 900 !important;
+      letter-spacing: .14em; text-shadow: none;
+      background: #e5e0ea !important;
+      box-shadow: 0 0 18px rgba(190,117,255,.68), 0 0 38px rgba(159,85,255,.3),
+        inset 0 0 0 5px rgba(255,255,255,.34);
       transition: transform .18s ease, box-shadow .18s ease;
     }}
-    .st-key-{button_key} div.stButton > button:hover {{
-      border-color: #c9a6ff !important; transform: translateY(-3px);
-      box-shadow: 0 0 28px rgba(159,85,255,.72), inset 0 0 24px rgba(186,142,255,.27);
+    .st-key-{button_key} div.stButton > button::before,
+    .st-key-{button_key} div.stButton > button::after {{
+      position:absolute; z-index:1; color:#3e245e; content:"C\\A ♥"; white-space:pre;
+      font:700 2rem/.86 Georgia,serif; letter-spacing:0; text-align:center;
+      text-shadow:none; pointer-events:none;
     }}
-    .st-key-{button_key} div.stButton > button p {{ color: #fff !important; }}
+    .st-key-{button_key} div.stButton > button::before {{ left:18px; top:15px; }}
+    .st-key-{button_key} div.stButton > button::after {{ right:18px; bottom:15px; transform:rotate(180deg); }}
+    .st-key-{button_key} div.stButton > button:hover {{
+      border-color: #f2caff !important; transform: translateY(-3px);
+      box-shadow: 0 0 28px rgba(190,117,255,.88), 0 0 48px rgba(159,85,255,.38),
+        inset 0 0 0 5px rgba(255,255,255,.42);
+    }}
+    .st-key-{button_key} div.stButton > button p {{ position:relative; z-index:2; color:#3e245e !important; }}
     .r2-card-scene {{ height: 320px; max-width: 520px; margin: .75rem auto 1rem; perspective: 1100px; }}
     .r2-clue-card {{ height: 100%; position: relative; transform-style: preserve-3d;
       animation: r2-card-flip .78s cubic-bezier(.2,.8,.25,1) both; }}
     @keyframes r2-card-flip {{ from {{ transform: rotateY(0deg); }} to {{ transform: rotateY(180deg); }} }}
     .r2-card-face {{ position: absolute; inset: 0; display: flex; flex-direction: column;
       align-items: center; justify-content: center; padding: 1.4rem; text-align: center;
-      border: 3px solid #9d55ff; border-radius: 18px; backface-visibility: hidden;
-      -webkit-backface-visibility: hidden; box-shadow: 0 0 22px rgba(159,85,255,.48),
-      inset 0 0 24px rgba(186,142,255,.18); }}
-    .r2-card-back {{ color: #fff; font-size: 1.25rem; font-weight: 900; letter-spacing: .14em;
-      background: radial-gradient(ellipse 42% 46% at 50% 50%, #34366f 0 80%, transparent 82%),
-      linear-gradient(135deg, #32164e, #302b69 57%, #172e5b); }}
-    .r2-card-front {{ transform: rotateY(180deg); color: #fbf7ff;
-      background: linear-gradient(145deg, #432274 0%, #34265f 52%, #173c70 100%); }}
-    .r2-card-front-label {{ color: #d8bdff; font-size: .78rem; font-weight: 900;
-      letter-spacing: .18em; margin-bottom: .8rem; text-transform: uppercase; }}
-    .r2-card-front-clue {{ font-size: clamp(1rem,2.5vw,1.3rem); font-weight: 700;
-      line-height: 1.55; margin: 0; white-space: pre-line; }}
+      border: 3px solid #e1a6ff; border-radius: 24px; backface-visibility: hidden;
+      -webkit-backface-visibility: hidden; box-shadow: 0 0 22px rgba(190,117,255,.68),
+      0 0 42px rgba(159,85,255,.32), inset 0 0 0 5px rgba(255,255,255,.34); }}
+    .r2-card-back {{ color: #3e245e; font-size: 1.25rem; font-weight: 900; letter-spacing: .14em;
+      background:#e5e0ea; }}
+    .r2-card-front {{ transform: rotateY(180deg); color:#3e245e;
+      background:#e5e0ea; }}
+    .r2-card-corner {{ position:absolute; left:18px; top:14px; color:#3e245e;
+      font:700 2rem/.86 Georgia,serif; text-align:center; }}
+    .r2-card-corner span {{ font-size:1.55rem; }}
+    .r2-card-corner-bottom {{ left:auto; top:auto; right:18px; bottom:14px; transform:rotate(180deg); }}
+    .r2-card-front-label {{ color:#3e245e; font:700 1.8rem/1.15 Georgia,serif;
+      letter-spacing:.01em; margin-bottom:.65rem; }}
+    .r2-card-front-clue {{ max-width:390px; font-size:clamp(1rem,2.5vw,1.3rem); font-weight:700;
+      line-height:1.5; margin:0; white-space:pre-line; }}
     @media(max-width:560px) {{
       .st-key-{button_key} div.stButton > button {{ min-height: 270px; }}
       .r2-card-scene {{ height: 270px; }}
       .r2-card-face {{ padding: 1rem; }}
+      .r2-card-corner {{ left:13px; top:11px; font-size:1.65rem; }}
+      .r2-card-corner span {{ font-size:1.3rem; }}
+      .r2-card-corner-bottom {{ left:auto; top:auto; right:13px; bottom:11px; }}
+      .st-key-{button_key} div.stButton > button::before {{ left:13px; top:11px; font-size:1.65rem; }}
+      .st-key-{button_key} div.stButton > button::after {{ right:13px; bottom:11px; font-size:1.65rem; }}
+      .r2-card-front-label {{ font-size:1.5rem; }}
     }}
     @media(prefers-reduced-motion:reduce) {{ .r2-clue-card {{ animation-duration: .01ms; }} }}
     </style>
@@ -244,8 +262,10 @@ def _clue_card(code, me, clue):
         "<div class='r2-clue-card'>"
         "<div class='r2-card-face r2-card-back'>Tap here</div>"
         "<div class='r2-card-face r2-card-front'>"
-        "<div class='r2-card-front-label'>Your clue</div>"
+        "<div class='r2-card-corner'>C<br><span>♥</span></div>"
+        "<div class='r2-card-front-label'>Clue</div>"
         f"<p class='r2-card-front-clue'>{html.escape(clue)}</p>"
+        "<div class='r2-card-corner r2-card-corner-bottom'>C<br><span>♥</span></div>"
         "</div></div></div>",
         unsafe_allow_html=True,
     )
