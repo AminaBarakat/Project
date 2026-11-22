@@ -187,51 +187,61 @@ def _locked_in_key(code):
 def _clue_card(code, me, clue):
     button_key = art.css_key(f"r2_{code}_{me}_clue_card")
     revealed_key = f"{button_key}_revealed"
-    footprint_uri = "data:image/svg+xml;base64," + base64.b64encode(
-        art.icon_svg("footprint").encode("utf-8")
-    ).decode("ascii")
     st.markdown(f"""
     <style>
     .st-key-{button_key} {{ max-width: 480px; margin: .75rem auto 1rem; }}
     .st-key-{button_key} div.stButton > button {{
-      min-height: 280px; border: 3px solid #9d55ff !important; border-radius: 18px !important;
-      color: #fff !important; font-size: 1.25rem !important; font-weight: 900 !important;
-      letter-spacing: .14em; text-shadow: 0 2px 8px #10071f;
-      background:
-        url("{footprint_uri}") left 18px bottom 14px / 30px 30px no-repeat,
-        url("{footprint_uri}") right 18px bottom 14px / 30px 30px no-repeat,
-        linear-gradient(135deg, #32164e, #302b69 57%, #173967) !important;
-      box-shadow: 0 0 18px rgba(159,85,255,.48), inset 0 0 22px rgba(186,142,255,.2);
+      min-height: 280px; position:relative; overflow:hidden;
+      border:3px solid #e1a6ff !important; border-radius:24px !important;
+      color:#3e245e !important; font-size:1.2rem !important; font-weight:900 !important;
+      letter-spacing:.14em; text-shadow:none; background:#e5e0ea !important;
+      box-shadow:0 0 18px rgba(190,117,255,.68),0 0 38px rgba(159,85,255,.3),
+        inset 0 0 0 5px rgba(255,255,255,.34);
       transition: transform .18s ease, box-shadow .18s ease;
     }}
-    .st-key-{button_key} div.stButton > button:hover {{
-      border-color: #c9a6ff !important; transform: translateY(-3px);
-      box-shadow: 0 0 28px rgba(159,85,255,.72), inset 0 0 24px rgba(186,142,255,.27);
+    .st-key-{button_key} div.stButton > button::before,
+    .st-key-{button_key} div.stButton > button::after {{
+      position:absolute; z-index:1; color:#3e245e; content:"C\\A ♥"; white-space:pre;
+      font:700 2rem/.86 Georgia,serif; letter-spacing:0; text-align:center;
+      text-shadow:none; pointer-events:none;
     }}
-    .st-key-{button_key} div.stButton > button p {{ color: #fff !important; }}
+    .st-key-{button_key} div.stButton > button::before {{ left:18px; top:15px; }}
+    .st-key-{button_key} div.stButton > button::after {{ right:18px; bottom:15px; transform:rotate(180deg); }}
+    .st-key-{button_key} div.stButton > button:hover {{
+      border-color:#f2caff !important; transform:translateY(-3px);
+      box-shadow:0 0 28px rgba(190,117,255,.88),0 0 48px rgba(159,85,255,.38),
+        inset 0 0 0 5px rgba(255,255,255,.42);
+    }}
+    .st-key-{button_key} div.stButton > button p {{ position:relative; z-index:2; color:#3e245e !important; }}
     .r2-clue-card {{ box-sizing:border-box; position:relative; overflow:hidden; min-height:280px; max-width:480px;
       display:flex; flex-direction:column;
-      align-items: center; justify-content: center; padding: 1.4rem; text-align: center;
-      border:3px solid #9d55ff; border-radius:18px; color:#fbf7ff;
-      background:linear-gradient(145deg, #432274 0%, #34265f 52%, #173c70 100%);
-      box-shadow:0 0 22px rgba(159,85,255,.48),inset 0 0 24px rgba(186,142,255,.18);
+      align-items:center; justify-content:center; padding:1.4rem; text-align:center;
+      border:3px solid #e1a6ff; border-radius:24px; color:#3e245e;
+      background:#e5e0ea;
+      box-shadow:0 0 22px rgba(190,117,255,.68),0 0 42px rgba(159,85,255,.32),
+        inset 0 0 0 5px rgba(255,255,255,.34);
       animation:r2-card-reveal .38s ease-out both; margin:.75rem auto 1rem; }}
     @keyframes r2-card-reveal {{ from {{ opacity:.25; transform:translateY(8px); }} to {{ opacity:1; transform:translateY(0); }} }}
-    .r2-card-footprint {{ position:absolute; bottom:14px; z-index:1; opacity:1;
-      filter:brightness(1.55) drop-shadow(0 0 7px rgba(235,225,255,.95)); pointer-events:none; }}
-    .r2-card-footprint-left {{ left:18px; transform:rotate(-20deg); }}
-    .r2-card-footprint-right {{ right:18px; transform:rotate(20deg) scaleX(-1); }}
-    .r2-card-rank, .r2-card-footer {{ color:#d8bdff; font-size:.68rem; font-weight:900;
+    .r2-card-corner {{ position:absolute; left:18px; top:14px; color:#3e245e;
+      font:700 2rem/.86 Georgia,serif; text-align:center; }}
+    .r2-card-corner span {{ font-size:1.55rem; }}
+    .r2-card-corner-bottom {{ left:auto; top:auto; right:18px; bottom:14px; transform:rotate(180deg); }}
+    .r2-card-footer {{ color:#705987; font-size:.68rem; font-weight:900;
       letter-spacing:.17em; text-transform:uppercase; position:absolute; z-index:2; }}
-    .r2-card-rank {{ top:18px; }}
     .r2-card-footer {{ bottom:18px; }}
-    .r2-card-front-label {{ color: #d8bdff; font-size: .78rem; font-weight: 900;
-      letter-spacing: .18em; margin-bottom: .8rem; text-transform: uppercase; position:relative; z-index:2; }}
-    .r2-card-front-clue {{ font-size: clamp(1rem,2.5vw,1.3rem); font-weight: 700;
+    .r2-card-front-label {{ color:#3e245e; font:700 1.8rem/1.15 Georgia,serif;
+      letter-spacing:.01em; margin-bottom:.65rem; position:relative; z-index:2; }}
+    .r2-card-front-clue {{ max-width:390px; color:#392c4a; font-size:clamp(1rem,2.5vw,1.3rem); font-weight:700;
       line-height: 1.55; margin: 0; white-space: pre-line; position:relative; z-index:2; }}
     @media(max-width:560px) {{
-      .st-key-{button_key} div.stButton > button {{ min-height: 240px; }}
+      .st-key-{button_key} div.stButton > button {{ min-height:240px; }}
       .r2-clue-card {{ min-height:240px; padding:1rem; }}
+      .r2-card-corner {{ left:13px; top:11px; font-size:1.65rem; }}
+      .r2-card-corner span {{ font-size:1.3rem; }}
+      .r2-card-corner-bottom {{ left:auto; top:auto; right:13px; bottom:11px; }}
+      .st-key-{button_key} div.stButton > button::before {{ left:13px; top:11px; font-size:1.65rem; }}
+      .st-key-{button_key} div.stButton > button::after {{ right:13px; bottom:11px; font-size:1.65rem; }}
+      .r2-card-front-label {{ font-size:1.5rem; }}
     }}
     @media(prefers-reduced-motion:reduce) {{ .r2-clue-card {{ animation-duration: .01ms; }} }}
     </style>
@@ -245,11 +255,10 @@ def _clue_card(code, me, clue):
 
     st.markdown(
         "<section class='r2-clue-card' role='group' aria-label='Your revealed clue'>"
-        f"<div class='r2-card-footprint r2-card-footprint-left' aria-hidden='true'>{art.icon('footprint', 34)}</div>"
-        f"<div class='r2-card-footprint r2-card-footprint-right' aria-hidden='true'>{art.icon('footprint', 34)}</div>"
-        "<div class='r2-card-rank'>Clue card · Round 2</div>"
-        "<div class='r2-card-front-label'>Your clue</div>"
+        "<div class='r2-card-corner'>C<br><span>♥</span></div>"
+        "<div class='r2-card-front-label'>Clue</div>"
         f"<p class='r2-card-front-clue'>{html.escape(clue)}</p>"
+        "<div class='r2-card-corner r2-card-corner-bottom'>C<br><span>♥</span></div>"
         "<div class='r2-card-footer'>Keep this clue secret</div>"
         "</section>",
         unsafe_allow_html=True,
