@@ -13,7 +13,7 @@ ROUTE_CHOICES = {
     "Gallery": ("Rooftop", "Kitchen"),
 }
 WRONG_DOORS = {"Vault": "Cellar", "Gallery": "Kitchen"}
-LOCKOUT_SECONDS = 10
+LOCKOUT_SECONDS = 5
 ROUND_SECONDS = 60
 INTRO_SECONDS = 5  # Retained for older saved rounds with a timed introduction.
 
