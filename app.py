@@ -111,13 +111,19 @@ def _screen_id(tour, me, now):
 # (next game, next round, the vote, the final), the frame is wiped first, so
 # nothing from the previous screen can stay behind on the page. Taps that stay
 # on the same screen don't wipe anything, so there's no flicker while playing.
-page = st.empty()
+# Two frames, used in turn: on a screen change the new screen is drawn in the other
+# frame and the old frame is emptied. (Emptying and redrawing the same frame in one
+# run doesn't work: Streamlit merges the two steps and the old pieces survive.)
+frames = [st.empty(), st.empty()]
 screen = _screen_id(tour, me, time.time())
+active = st.session_state.get("mm_frame", 0)
 if st.session_state.get("mm_screen") != screen:
-    page.empty()
+    active = 1 - active
+    st.session_state["mm_frame"] = active
     st.session_state["mm_screen"] = screen
+frames[1 - active].empty()
 
-with page.container():
+with frames[active].container():
     if tour["status"] == "lobby":
         lobby.show(tour["code"], me)
     elif tour["status"] in ("round1", "round1_results"):

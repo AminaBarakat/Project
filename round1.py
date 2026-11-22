@@ -38,7 +38,7 @@ GAME_TIMES = {
     "pattern": 15,            # one tap
     "memory": 25,             # 5 s to look + 20 s to pick the three missing objects
     "number_lock": 30,        # three digits, three clues
-    "escape_route": 40,       # three or four doors
+    "escape_route": 30,       # three doors, three house rules
 }
 GAME_SECONDS = max(GAME_TIMES.values())   # the longest game (kept for older code and tests)
 TIEBREAK_SECONDS = 15
@@ -132,7 +132,7 @@ PUZZLES = {
     ],
     # The same house rules every time, but the doors and what they say change.
     # "hidden" spells out what the descriptions reveal (the tests use it).
-    # Short houses: 3 or 4 doors from Start to the Exit. "hidden" says which rooms break
+    # Short houses: exactly 3 doors from Start to the Exit. "hidden" says which rooms break
     # a house rule; tests/test_round1.py proves exactly one route breaks none.
     "escape_route": [
         {"map": {"Start": ["Gallery", "Hall", "Kitchen"],
@@ -160,10 +160,10 @@ PUZZLES = {
         {"map": {"Start": ["Hall", "Conservatory", "Chapel"],
                  "Hall": ["Library", "Kitchen"],
                  "Conservatory": ["Billiard Room", "Ballroom"],
-                 "Chapel": ["Study"],
-                 "Library": ["Billiard Room", "Clock Room"],
+                 "Chapel": ["Study", "Greenhouse"],
+                 "Library": ["Exit", "Clock Room"],
                  "Kitchen": ["Exit"],
-                 "Billiard Room": ["Exit", "Wine Cellar"],
+                 "Billiard Room": ["Exit"],
                  "Ballroom": ["Exit"],
                  "Study": ["Exit"],
                  "Clock Room": ["Exit"]},
@@ -175,11 +175,11 @@ PUZZLES = {
                    "Billiard Room": "Green felt and silence.",
                    "Ballroom": "A banquet is laid out for a party.",
                    "Study": "A desk covered in maps.",
-                   "Clock Room": "Dozens of clocks on every wall.",
-                   "Wine Cellar": "Bottles, cheese and a locked gate.",
+                   "Greenhouse": "Glass walls, no other door.",
+                  "Clock Room": "Dozens of clocks on every wall.",
                    "Exit": "Fresh night air!"},
-         "hidden": {"food": set(["Ballroom", "Conservatory", "Kitchen", "Wine Cellar"]), "ticks": set(["Chapel", "Clock Room"]), "guard": set([])},
-         "answer": ["Hall", "Library", "Billiard Room", "Exit"]},
+         "hidden": {"food": set(["Ballroom", "Conservatory", "Kitchen"]), "ticks": set(["Chapel", "Clock Room"]), "guard": set([])},
+         "answer": ["Hall", "Library", "Exit"]},
         {"map": {"Start": ["Library", "Music Room", "Pantry"],
                  "Library": ["Gallery", "Clock Room"],
                  "Music Room": ["Gallery", "Exit"],
@@ -199,7 +199,7 @@ PUZZLES = {
                  "Conservatory": ["Study", "Ballroom"],
                  "Kitchen": ["Study", "Pantry"],
                  "Hall": ["Billiard Room"],
-                 "Study": ["Billiard Room", "Chapel"],
+                 "Study": ["Exit", "Chapel"],
                  "Ballroom": ["Exit"],
                  "Billiard Room": ["Exit", "Storage Room"],
                  "Chapel": ["Exit"]},
@@ -214,9 +214,9 @@ PUZZLES = {
                    "Storage Room": "Dusty boxes, no other door.",
                    "Exit": "Fresh night air!"},
          "hidden": {"food": set(["Ballroom", "Kitchen", "Pantry"]), "ticks": set(["Chapel", "Hall"]), "guard": set([])},
-         "answer": ["Conservatory", "Study", "Billiard Room", "Exit"]},
+         "answer": ["Conservatory", "Study", "Exit"]},
         {"map": {"Start": ["Study", "Wine Cellar", "Clock Room"],
-                 "Study": ["Gallery", "Music Room"],
+                 "Study": ["Library", "Music Room"],
                  "Wine Cellar": ["Gallery"],
                  "Clock Room": ["Library"],
                  "Gallery": ["Library", "Kitchen"],
@@ -233,7 +233,7 @@ PUZZLES = {
                    "Storage Room": "Dusty boxes, no other door.",
                    "Exit": "Fresh night air!"},
          "hidden": {"food": set(["Kitchen", "Wine Cellar"]), "ticks": set(["Clock Room"]), "guard": set(["Music Room"])},
-         "answer": ["Study", "Gallery", "Library", "Exit"]},
+         "answer": ["Study", "Library", "Exit"]},
     ],
     "memory": [
         # "options" are the 10 objects players pick from: the 3 that vanished, 3 that
