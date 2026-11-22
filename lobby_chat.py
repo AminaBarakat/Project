@@ -17,7 +17,7 @@ GREETINGS = {
 }
 
 COOLDOWN = 3          # seconds between two greetings from the same player
-BUBBLE_SECONDS = 6    # how long a bubble stays next to the seat
+BUBBLE_SECONDS = 10   # long enough for the other phones' 2-second refresh to show it
 KEEP = 12             # only the latest greetings are stored
 
 

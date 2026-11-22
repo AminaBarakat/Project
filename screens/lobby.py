@@ -301,8 +301,9 @@ def _say_hello(code, tour, me):
                 with column:
                     if st.button(chat.GREETINGS[kind][0], key=f"mm_hello_{kind}", width="stretch"):
                         _, message = storage.update(code, chat.greet, me, kind, time.time())
-                        if message != chat.GREETINGS[kind][1]:
-                            st.toast(message)
+                        # Show the sender immediate feedback too. Other players see the
+                        # bubble after their short shared-state refresh.
+                        st.toast(message)
                         st.rerun()
     lines = []
     newest = tour["players"][-1] if len(tour["players"]) > 1 else None
