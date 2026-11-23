@@ -297,9 +297,9 @@ def first_limit(tour, pid="p0"):
 
 
 def test_every_game_has_its_own_short_timer():
-    assert r1.GAME_TIMES == {"pattern": 15, "memory": 25, "number_lock": 30, "escape_route": 30}
+    assert r1.GAME_TIMES == {"pattern": 25, "memory": 35, "number_lock": 30, "escape_route": 30}
     assert r1.MEMORY_SHOW_SECONDS == 5 and r1.TIEBREAK_SECONDS == 15
-    assert sum(r1.GAME_TIMES.values()) <= 100     # all four games together: under 2 minutes
+    assert sum(r1.GAME_TIMES.values()) <= 120     # all four games together: at most 2 minutes
 
 
 def test_intro_then_the_first_game_with_its_own_timer():

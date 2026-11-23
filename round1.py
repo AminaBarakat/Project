@@ -35,8 +35,8 @@ import round2 as duo_round
 INTRO_SECONDS = 8           # long enough for the VS moment and a look at your four games
 # Round 1 is about thinking AND reacting fast, so every game has its own short timer.
 GAME_TIMES = {
-    "pattern": 15,            # one tap
-    "memory": 25,             # 5 s to look + 20 s to pick the three missing objects
+    "pattern": 25,            # one tap, with time for the shared save to reach the server
+    "memory": 35,             # 5 s to look + 30 s to pick the three missing objects
     "number_lock": 30,        # three digits, three clues
     "escape_route": 30,       # three doors, three house rules
 }
