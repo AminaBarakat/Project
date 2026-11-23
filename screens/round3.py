@@ -273,9 +273,7 @@ def _mystery(tour, code, me, now):
         st.warning("You have used your theories. Watch the other finalist or wait for the clock.")
         return
 
-    suspect = _theory_choice_cards(code, "suspect", "Who stole the Moonstone Key?", r3.SUSPECTS)
-    room = _theory_choice_cards(code, "room", "Where did they hide it?", r3.ROOMS)
-    object_name = _theory_choice_cards(code, "object", "What object did they carry?", r3.OBJECTS)
+    suspect, room, object_name = _theory_choices(code)
     st.markdown("<div class='r3-vault-lock'><div class='r3-vault-lock-title'>✦ Moonstone Vault Lock</div><div class='r3-vault-lock-help'>Enter the three evidence markers from your chosen thief, place, and object.</div></div>", unsafe_allow_html=True)
     lock_key = art.css_key(f"r3_vault_{code}")
     st.markdown(art.lock_style(lock_key, digits=3), unsafe_allow_html=True)
@@ -297,6 +295,15 @@ def _mystery(tour, code, me, now):
         st.rerun()
 
 
+@st.fragment
+def _theory_choices(code):
+    """Keep card changes local instead of redrawing the whole case file."""
+    suspect = _theory_choice_cards(code, "suspect", "Who stole the Moonstone Key?", r3.SUSPECTS)
+    room = _theory_choice_cards(code, "room", "Where did they hide it?", r3.ROOMS)
+    object_name = _theory_choice_cards(code, "object", "What object did they carry?", r3.OBJECTS)
+    return suspect, room, object_name
+
+
 def _theory_choice_cards(code, group, question, options):
     """Three glass choices, using session state only until the theory is submitted."""
     state_key = f"r3_{code}_{group}_choice"
@@ -316,8 +323,7 @@ def _theory_choice_cards(code, group, question, options):
         with column:
             if st.button(("✓ " if selected else "") + option, key=widget_key, width="stretch"):
                 st.session_state[state_key] = option
-                # The click itself reruns the script. Starting another whole-page
-                # rerun here made consecutive phone taps needlessly sluggish.
+                # This reruns only _theory_choices, not the entire case file.
     return st.session_state[state_key]
 
 
