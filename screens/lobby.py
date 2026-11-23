@@ -6,7 +6,8 @@ What's on the page (phone and laptop):
   seats pulse, the host wears a crown, your own seat glows;
 * greetings (Wave, Good luck, …) that pop up as a bubble next to the sender's seat,
   with a small feed; a warm-up riddle; "how the night goes" for first-timers;
-* the host's Start button (and a small menu to remove someone).
+* the host's Start button (and a small menu to remove someone), and a switch that
+  shows a QR code people can scan to join;
 
 The page itself is drawn as one normal Streamlit run, so taps can't get lost. A tiny
 invisible watcher (_watch) checks every 2 seconds, using the shared copy in
@@ -22,6 +23,7 @@ import time
 import streamlit as st
 
 import lobby_chat as chat
+import qr
 import storage
 import tournament as rules
 from screens import art, avatars, common, live
@@ -81,6 +83,17 @@ STYLE = f"""<style>
 .st-key-mm_lobby_top [data-testid="stColumn"]:last-child {{ flex: 1 1 0 !important; }}
 .mm-code {{ background: #0c0518; border: 1px solid {art.PURPLE}88; border-radius: 14px; padding: .4rem .9rem .5rem;
   box-shadow: 0 0 18px {art.PURPLE}44; white-space: nowrap; }}
+/* host's QR invite: white card so every phone camera can read it */
+.st-key-mm_qr_toggle {{ display: flex; justify-content: center; margin: .2rem 0 .1rem; }}
+.mm-qr {{ width: min(300px, 82vw); margin: .3rem auto 1rem; padding: .9rem .9rem .8rem; text-align: center;
+  background: #0c0518; border: 1px solid {art.PURPLE}88; border-radius: 18px;
+  box-shadow: 0 0 26px {art.PURPLE}55; animation: mm-qr-in .3s ease-out both; }}
+.mm-qr-label {{ font-size: .66rem; letter-spacing: .2em; font-weight: 800; color: #e4e7efcc; margin-bottom: .55rem; }}
+.mm-qr-code {{ background: #fff; border-radius: 12px; padding: 6px; line-height: 0; }}
+.mm-qr-code svg {{ width: 100%; height: auto; display: block; }}
+.mm-qr-foot {{ margin-top: .6rem; font-size: .74rem; color: #e4e7ef99; }}
+.mm-qr-foot b {{ font-family: 'Courier New', monospace; color: #fff; letter-spacing: .15em; }}
+@keyframes mm-qr-in {{ from {{ opacity: 0; transform: scale(.94); }} to {{ opacity: 1; transform: none; }} }}
 .mm-code small {{ display: block; font-size: .6rem; letter-spacing: .16em; color: #e4e7ef99; font-weight: 700; }}
 .mm-code b {{ font-family: 'Courier New', monospace; font-size: 1.75rem; letter-spacing: .25em; color: #fff; }}
 .mm-invite {{ font-size: .62rem; letter-spacing: .16em; color: #e4e7ef99; font-weight: 700; margin-bottom: .25rem; }}
@@ -213,7 +226,7 @@ def show(code, me):
     guests = "FIVE" if rules.table_size(tour) == 5 else "EIGHT"
     st.markdown(f"<div class='mm-lobby-tag'>{guests} GUESTS · ONE MANSION · ONE LAST CLUE</div>", unsafe_allow_html=True)
     common.show_flash()
-    _code_and_link(code)
+    _code_and_link(code, tour, me)
     st.markdown(_table(tour, me, now), unsafe_allow_html=True)
     if rules.is_host(tour, me) and len(tour["players"]) > 1:
         _manage_seats(code, tour, me)
@@ -242,7 +255,7 @@ def show(code, me):
     _start_or_wait(code, tour, me)
 
 
-def _code_and_link(code):
+def _code_and_link(code, tour, me):
     with st.container(key="mm_lobby_top"):
         code_col, link_col = st.columns([1, 3])
         with code_col:
@@ -253,6 +266,29 @@ def _code_and_link(code):
                 st.markdown("<div class='mm-invite'>INVITE LINK · TAP ⧉ TO COPY</div>", unsafe_allow_html=True)
                 st.code(link, language=None)
     st.caption("Share the code or this link, not your own page address: your address is your seat in the game.")
+    if rules.is_host(tour, me):
+        _qr_invite(code)
+
+
+def _qr_invite(code):
+    """The host can show a QR code: people scan it with their phone camera and land
+    on the join page with the code already filled in (handy in a room, e.g. to
+    invite someone to a demo game without sending them a link)."""
+    link = common.join_link(code)
+    if not link:
+        return
+    with st.container(key="mm_qr_toggle"):
+        shown = st.toggle("Show a QR code to invite players", key=f"mm_qr_{code}")
+    if not shown:
+        return
+    st.markdown(
+        "<div class='mm-qr'>"
+        "<div class='mm-qr-label'>SCAN TO JOIN</div>"
+        f"<div class='mm-qr-code'>{qr.svg(link)}</div>"
+        f"<div class='mm-qr-foot'>Point your phone camera at the code · or type <b>{html.escape(code)}</b></div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def _table(tour, me, now):
