@@ -137,6 +137,7 @@ def _show_round(code, me):
     # Keep the briefing in one browser render: the character animation can then
     # progress smoothly instead of restarting in the live timer fragment.
     tour = storage.load(code)
+    now = time.time()
     if tour and tour["status"] == "round3" and tour["round3"].get("starts_at") is None:
         _story_style()
         _story(tour, code, me, time.time())
@@ -147,25 +148,35 @@ def _show_round(code, me):
         _story_style()
         _results(tour, me)
         return
-    _live_round(code, me)
-
-
-@st.fragment(run_every="0.5s")
-def _live_round(code, me):
-    now = time.time()
-    tour, _ = storage.update(code, r3.settle, now)
     if tour is None:
         st.error("This tournament could not be found.")
         return
-    if tour["status"] not in ("round3", "round3_results", "finished"):
+    if tour["status"] != "round3":
         st.rerun(scope="app")
 
     _story_style()
-    if tour["status"] == "round3" and "starts_at" in tour["round3"] and tour["round3"]["starts_at"] is None:
+    state = tour["round3"]
+    if state.get("starts_at") is None:
         _story(tour, code, me, now)
-    elif tour["status"] == "round3":
-        _mystery(tour, code, me, now)
     else:
+        _mystery(tour, code, me, now)
+    _round3_watch(code, tour["status"], state.get("starts_at"), state.get("ends_at"))
+
+
+@st.fragment(run_every="1s")
+def _round3_watch(code, shown_status, shown_starts_at, shown_ends_at):
+    """Watch state changes without redrawing the case-file controls."""
+    now = time.time()
+    tour = storage.load(code)
+    if tour is None:
+        return
+    state = tour.get("round3", {})
+    if tour.get("status") == "round3" and state.get("ends_at") is not None and now >= state["ends_at"]:
+        tour, _ = storage.update(code, r3.settle, now)
+        state = tour.get("round3", {}) if tour else {}
+    if (tour is None or tour.get("status") != shown_status
+            or state.get("starts_at") != shown_starts_at
+            or state.get("ends_at") != shown_ends_at):
         st.rerun(scope="app")
 
 
@@ -283,7 +294,7 @@ def _mystery(tour, code, me, now):
         if after is not None and after["status"] == "round3_results":
             st.rerun(scope="app")
         st.error(message) if message.startswith("Not quite") else st.toast(message)
-        st.rerun(scope="fragment")
+        st.rerun()
 
 
 def _theory_choice_cards(code, group, question, options):
