@@ -316,7 +316,8 @@ def _theory_choice_cards(code, group, question, options):
         with column:
             if st.button(("✓ " if selected else "") + option, key=widget_key, width="stretch"):
                 st.session_state[state_key] = option
-                st.rerun()
+                # The click itself reruns the script. Starting another whole-page
+                # rerun here made consecutive phone taps needlessly sluggish.
     return st.session_state[state_key]
 
 

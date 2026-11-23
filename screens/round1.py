@@ -36,6 +36,7 @@ WAITING_LINES = [
 def show(code, me):
     live.forget()                             # the refreshing parts start from data at least this new
     now = time.time()
+    _save_ready_memory_at_timeout(code, me, now)
     tour = _load_settled(code, now)
     if tour is None or tour["status"] not in ("round1", "round1_results"):
         st.rerun()                            # Round 2, or the tournament vanished
@@ -68,6 +69,27 @@ def _load_settled(code, now, quick=False):
     if tour is not None and r1.settle(tour, now)[0] != tour:
         tour, _ = storage.update(code, r1.settle, now)
     return tour
+
+
+def _save_ready_memory_at_timeout(code, me, now):
+    """Save three pre-deadline Memory choices if the final Lock in tap was missed.
+
+    The selections live only in this phone's session until Lock in is pressed.
+    We keep the moment the third one was selected, so this fallback is used only
+    when all three choices were ready *before* the timer ended.
+    """
+    tour = storage.load(code)
+    if tour is None or tour.get("status") != "round1" or me not in tour["round1"].get("players", {}):
+        return
+    number = r1.game_number(tour, me)
+    if r1.is_done(tour, me) or r1.current_game(tour, me) != "memory":
+        return
+    started = tour["round1"]["players"][me]["game_started_at"]
+    deadline = started + r1.time_limit("memory")
+    picked = st.session_state.get(_key(code, f"memory_{number}"), [])
+    ready_at = st.session_state.get(_key(code, f"memory_ready_{number}"))
+    if len(picked) == 3 and ready_at is not None and ready_at <= deadline <= now:
+        storage.update(code, r1.answer, me, number, list(picked), ready_at)
 
 
 @st.fragment(run_every="1s")
@@ -311,8 +333,11 @@ def _pattern(code, me, number, puzzle):
             chosen = option == picked
             if _picture_button(f"pattern_{number}_{option}", art.tile(shape, colour),
                                f"✓ {option}" if chosen else option, selected=chosen, bob=not picked):
-                st.session_state[picked_key] = None if chosen else option
-                st.rerun()
+                # A button click has already started this Streamlit run. Do not
+                # force a second full rerun here: on phones that extra database
+                # read made the next tap feel delayed.
+                picked = None if chosen else option
+                st.session_state[picked_key] = picked
     if st.button("Lock in", type="primary", width="stretch", disabled=picked is None,
                  key=f"pattern_lock_{number}"):
         _submit(code, me, number, picked)
@@ -358,6 +383,7 @@ def _memory(tour, code, me, number, now, puzzle):
     st.write(f"**Which {need} vanished? Tap {need} objects**, then lock in.")
 
     picked_key = _key(code, f"memory_{number}")
+    ready_key = _key(code, f"memory_ready_{number}")
     picked = st.session_state.setdefault(picked_key, [])
     rows = [_grid(f"memory_{number}_{r}", 5) for r in range(2)]
     for k, name in enumerate(puzzle["options"]):       # 3 vanished, 3 still here, 4 never shown
@@ -369,7 +395,12 @@ def _memory(tour, code, me, number, now, puzzle):
                     picked.remove(name)
                 elif len(picked) < need:
                     picked.append(name)
-                st.rerun()
+                if len(picked) == need:
+                    st.session_state[ready_key] = time.time()
+                else:
+                    st.session_state.pop(ready_key, None)
+                # The following tap will render the updated selection. Avoid an
+                # immediate second rerun, which used to pause between picks.
     if st.button("Lock in", type="primary", width="stretch", disabled=len(picked) != need,
                  key=f"memory_lock_{number}"):
         _submit(code, me, number, list(picked))
