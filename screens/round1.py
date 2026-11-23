@@ -332,13 +332,9 @@ def _pattern(code, me, number, puzzle):
     for column, (option, (shape, colour)) in zip(columns, puzzle["options"].items()):
         with column:
             chosen = option == picked
-            if _picture_button(f"pattern_{number}_{option}", art.tile(shape, colour),
-                               f"✓ {option}" if chosen else option, selected=chosen, bob=not picked):
-                # A button click has already started this Streamlit run. Do not
-                # force a second full rerun here: on phones that extra database
-                # read made the next tap feel delayed.
-                picked = None if chosen else option
-                st.session_state[picked_key] = picked
+            _picture_button(f"pattern_{number}_{option}", art.tile(shape, colour),
+                            f"✓ {option}" if chosen else option, selected=chosen, bob=not picked,
+                            on_click=_toggle_pattern_choice, args=(picked_key, option))
     if st.button("Lock in", type="primary", width="stretch", disabled=picked is None,
                  key=f"pattern_lock_{number}"):
         _submit(code, me, number, picked)
@@ -360,15 +356,14 @@ def _escape_route(code, me, number, puzzle):
     columns = _grid(f"doors_{number}_{art.css_key(here)}", len(doors))
     for k, (column, room) in enumerate(zip(columns, doors)):
         with column:
-            if _picture_button(f"door_{number}_{here}_{room}", art.room(room), room, height=130,
-                               appear=0.15 + 0.18 * k):
-                new_route = route + [room]
-                if room in puzzle["map"]:          # not a dead end yet: keep walking
-                    st.session_state[route_key] = new_route
-                    st.rerun()
-                else:
-                    st.session_state[route_key] = []
-                    _submit(code, me, number, new_route)
+            if room in puzzle["map"]:              # not a dead end yet: keep walking
+                _picture_button(f"door_{number}_{here}_{room}", art.room(room), room, height=130,
+                                appear=0.15 + 0.18 * k, on_click=_advance_route,
+                                args=(route_key, route, room))
+            elif _picture_button(f"door_{number}_{here}_{room}", art.room(room), room, height=130,
+                                 appear=0.15 + 0.18 * k):
+                st.session_state[route_key] = []
+                _submit(code, me, number, route + [room])
             st.caption(puzzle["rooms"][room])
 
 
@@ -416,6 +411,17 @@ def _toggle_memory_choice(picked_key, ready_key, name, need):
         st.session_state[ready_key] = time.time()
     else:
         st.session_state.pop(ready_key, None)
+
+
+def _toggle_pattern_choice(picked_key, option):
+    """Toggle a Pattern Wall tile before Streamlit draws Lock in again."""
+    current = st.session_state.get(picked_key)
+    st.session_state[picked_key] = None if current == option else option
+
+
+def _advance_route(route_key, route, room):
+    """Save a non-final Map choice before the normal button rerun."""
+    st.session_state[route_key] = list(route) + [room]
 
 
 # --- tie-breaker -----------------------------------------------------------------
