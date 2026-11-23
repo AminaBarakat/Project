@@ -13,11 +13,12 @@ ROUTE_CHOICES = {
     "Gallery": ("Rooftop", "Kitchen"),
 }
 WRONG_DOORS = {"Vault": "Cellar", "Gallery": "Kitchen"}
-LOCKOUT_SECONDS = 10
-ROUND_SECONDS = 180
+LOCKOUT_SECONDS = 5
+ROUND_SECONDS = 60
+INTRO_SECONDS = 5  # Retained for older saved rounds with a timed introduction.
 
 
-def new_round(player_ids, now, rng=None):
+def new_round(player_ids, now, rng=None, show_intro=False):
     """Pair the four Round 1 winners and create their shared vault state."""
     if len(player_ids) != 4 or len(set(player_ids)) != 4:
         raise ValueError("Round 2 needs exactly four different players.")
@@ -41,7 +42,7 @@ def new_round(player_ids, now, rng=None):
         for card, player_id in zip(("A", "B"), pair):
             players[player_id] = {"duo_id": duo_id, "card": card}
 
-    return {
+    round_state = {
         "started_at": now,
         "players": players,
         "duos": duos,
@@ -49,6 +50,17 @@ def new_round(player_ids, now, rng=None):
         "resolved_at": None,
         "decided_by": None,
     }
+    if show_intro:
+        # Keep the matchup page visible until a finalist starts the challenge.
+        # The challenge clock begins from that shared server-side action.
+        round_state["intro_ends_at"] = None
+        round_state["challenge_started_at"] = None
+    return round_state
+
+
+def _challenge_started_at(round_state):
+    """Use the post-intro server time for the challenge clock when an intro exists."""
+    return round_state.get("challenge_started_at", round_state["started_at"])
 
 
 def _validate_action(tour, player_id, duo_id, now):
@@ -72,7 +84,13 @@ def _validate_action(tour, player_id, duo_id, now):
     duo = round_state.get("duos", {}).get(duo_id)
     if not duo:
         return None, None, "That duo doesn't exist."
-    if now >= round_state["started_at"] + ROUND_SECONDS:
+    challenge_started_at = _challenge_started_at(round_state)
+    if challenge_started_at is None:
+        return None, None, "The Round 2 challenge hasn't started yet."
+    intro_ends_at = round_state.get("intro_ends_at")
+    if intro_ends_at is not None and now < intro_ends_at:
+        return None, None, "The Round 2 introduction is still playing."
+    if now >= challenge_started_at + ROUND_SECONDS:
         return None, None, "Time is up. The result is being settled."
     if duo.get("finished_at") is not None:
         return None, None, "Your duo has already finished."
@@ -134,12 +152,64 @@ def choose_door(tour, player_id, duo_id, destination, now, rng=None):
     return new, f"Safe choice. You reached {destination}."
 
 
+def share_clue(tour, player_id, now):
+    """The clue holder sends their clue to their teammate's phone. Only the holder
+    can do this (their own card), once, while Round 2 is being played."""
+    round_state = tour.get("round2") or {}
+    if tour.get("status") != "round2" or round_state.get("winner") is not None:
+        return tour, "Round 2 is not active."
+    assignment = round_state.get("players", {}).get(player_id)
+    if not assignment:
+        return tour, "You're not playing in Round 2."
+    if _challenge_started_at(round_state) is None:
+        return tour, "The Round 2 challenge hasn't started yet."
+    if assignment.get("shared_at") is not None:
+        return tour, "You've already sent your clue."
+    new = copy.deepcopy(tour)
+    new["round2"]["players"][player_id]["shared_at"] = now
+    return new, "Clue sent to your teammate!"
+
+
+def prepare_round(tour, now, rng=None):
+    """Migrate older Round 2 states and settle any expired challenge."""
+    round_state = tour.get("round2")
+    if (tour.get("status") == "round2" and round_state
+            and "challenge_started_at" not in round_state):
+        new = copy.deepcopy(tour)
+        intro_ends_at = round_state.get("intro_ends_at")
+        if intro_ends_at is None:
+            intro_ends_at = round_state.get("started_at", now) + INTRO_SECONDS
+        new["round2"]["intro_ends_at"] = intro_ends_at
+        new["round2"]["challenge_started_at"] = intro_ends_at
+        tour = new
+    return settle(tour, now, rng)
+
+
+def start_challenge(tour, player_id, now):
+    """Let a Round 2 finalist start the shared challenge and its server timer."""
+    round_state = tour.get("round2") or {}
+    if tour.get("status") != "round2":
+        return tour, "Round 2 is not active."
+    if player_id in tour.get("eliminated", []):
+        return tour, "You were eliminated and can't start Round 2."
+    if player_id not in round_state.get("players", {}):
+        return tour, "You're not playing in Round 2."
+    if _challenge_started_at(round_state) is not None:
+        return tour, "The Round 2 challenge has already started."
+
+    new = copy.deepcopy(tour)
+    new["round2"]["intro_ends_at"] = now
+    new["round2"]["challenge_started_at"] = now
+    return new, "Round 2 challenge started."
+
+
 def settle(tour, now, rng=None):
     """Resolve the timeout once. Storage serializes this with every other action."""
     round_state = tour.get("round2")
     if tour.get("status") != "round2" or not round_state:
         return tour, ""
-    if now < round_state["started_at"] + ROUND_SECONDS:
+    challenge_started_at = _challenge_started_at(round_state)
+    if challenge_started_at is None or now < challenge_started_at + ROUND_SECONDS:
         return tour, ""
 
     solved = [duo_id for duo_id, duo in round_state["duos"].items()
@@ -194,17 +264,24 @@ def player_view(tour, player_id):
     duo = round_state["duos"][duo_id]
     teammate_id = next(pid for pid in duo["players"] if pid != player_id)
     teammate = next((p for p in tour.get("players", []) if p["id"] == teammate_id), None)
+    teammate_assignment = round_state["players"].get(teammate_id, {})
+    challenge_started_at = _challenge_started_at(round_state)
     view.update({
         "duo_id": duo_id,
         "card": CARD_A if assignment["card"] == "A" else CARD_B,
+        "card_shared": assignment.get("shared_at") is not None,
+        # The teammate's clue, but only once the teammate chose to send it.
+        "teammate_card": ((CARD_A if teammate_assignment.get("card") == "A" else CARD_B)
+                          if teammate_assignment.get("shared_at") is not None else None),
         "teammate": copy.deepcopy(teammate),
         "code_solved_at": duo["code_solved_at"],
         "route_step": duo["route_step"],
         "alarm_count": duo["alarm_count"],
         "locked_until": duo["locked_until"],
         "finished_at": duo["finished_at"],
-        "started_at": round_state["started_at"],
-        "ends_at": round_state["started_at"] + ROUND_SECONDS,
+        "started_at": challenge_started_at,
+        "ends_at": (challenge_started_at + ROUND_SECONDS
+                    if challenge_started_at is not None else None),
         "advanced": round_state["winner"] == duo_id,
     })
     return view

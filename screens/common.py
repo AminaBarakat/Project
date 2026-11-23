@@ -78,6 +78,8 @@ def apply_theme():
       text-align: center; text-transform: uppercase; white-space: nowrap; background: linear-gradient(180deg, #ffffff 2%, #e4bcff 26%, #87f1ff 56%, #dca7ff 82%, #ffffff 100%);
       -webkit-background-clip: text; background-clip: text; color: transparent;
       -webkit-text-stroke: .35px #f7eaff; text-shadow: 0 0 5px rgba(255,255,255,.95), 0 0 18px rgba(205,116,255,.95), 0 0 38px rgba(89,220,255,.68), 2px 3px 0 #271247; }
+    @media (max-width: 560px) { .mm-wordmark { white-space: normal; font-size: 2.15rem; line-height: 1.1; }
+      .mm-tagline { font-size: .78rem !important; letter-spacing: .05em !important; } }
     .mm-tagline { color: #d7b9ee !important; font-family: Georgia, serif; font-size: 1.1rem; letter-spacing: .08em; text-align: center; }
     .mm-avatar-help { color: #d9c2ec !important; margin: .15rem 0 .65rem; }
     .mm-profile { text-align: center; min-width: 120px; }
@@ -124,34 +126,78 @@ def show_wordmark():
 
 
 def avatar_picker(key, unavailable=()):
-    """Clickable glass portrait cards; occupied portraits are shown as unavailable."""
+    """A compact, picture-only detective picker.
+
+    Each portrait is an in-page Streamlit button. Keeping the selection in
+    session state means choosing a different detective never changes the URL
+    (and therefore never creates a second player page).
+    """
+    from screens import avatars          # imported here: avatars.py itself uses this file
+
     choice_key = f"{key}_choice"
     unavailable = set(unavailable)
     if choice_key not in st.session_state or st.session_state[choice_key] in unavailable:
         st.session_state[choice_key] = next((option for option in AVATARS if option not in unavailable), "girl")
-    st.markdown("<div class='mm-avatar-help'>Choose your detective — each portrait can be claimed by one player only.</div>", unsafe_allow_html=True)
     options = list(AVATARS)
-    for start in range(0, len(options), 2):
-        columns = st.columns(2)
-        for column, option in zip(columns, options[start:start + 2]):
-            _, path = AVATARS[option]
-            widget_key = f"{key}_{option}"
-            selected = st.session_state[choice_key] == option
-            taken = option in unavailable
-            selector = f".st-key-{widget_key} div.stButton > button"
-            selected_style = "outline:3px solid #9be4ff !important; outline-offset:2px; box-shadow:0 0 24px rgba(155,228,255,.58) !important;" if selected else ""
-            st.markdown(f"""<style>
-            {selector} {{ background: linear-gradient(rgba(30,14,58,.12), rgba(30,14,58,.55)), url('{avatar_data_url(path)}') center / auto 158px no-repeat, rgba(255,255,255,.08) !important;
-              border:1px solid rgba(226,183,255,.72) !important; border-radius:18px !important; min-height:190px; padding:158px .3rem .4rem !important;
-              transition:transform .15s ease, box-shadow .15s ease; {selected_style} {'opacity:.28 !important; filter:grayscale(1);' if taken else ''} }}
-            {selector}:hover {{ transform:translateY(-4px); box-shadow:0 0 22px rgba(203,151,255,.55) !important; }}
-            {selector} p {{ color:transparent !important; font-size:0 !important; }}
-            {selector}::after {{ content:'✓'; color:#fff; font-size:1.55rem; opacity:{'1' if selected else '0'}; position:absolute; right:.65rem; top:.4rem; text-shadow:0 0 8px #62d4ff; }}
-            </style>""", unsafe_allow_html=True)
-            with column:
-                if st.button(" ", key=widget_key, width="stretch", disabled=taken):
-                    st.session_state[choice_key] = option
-                    st.rerun()
+    chosen = st.session_state[choice_key]
+
+    css = """
+    <style>
+    .mm-avatar-taken { position:relative; aspect-ratio:1 / 1; overflow:hidden; border-radius:14px;
+      background:radial-gradient(circle at 50% 30%, #4b2a86, #1d1438 75%); border:2px solid transparent;
+    }
+    .mm-avatar-taken::before { content:''; position:absolute; inset:0; z-index:1;
+      background:rgba(54, 22, 94, .66); box-shadow:inset 0 0 32px rgba(8, 3, 20, .65); }
+    .mm-avatar-taken img { width:100%; height:100%; object-fit:contain; display:block; }
+    /* Streamlit normally stacks columns on a phone. Detective portraits are small,
+       tap-friendly choices, so keep the four-card row intact instead. */
+    @media (max-width: 640px) {
+      .st-key-PICKER [data-testid="stHorizontalBlock"] { flex-wrap:nowrap !important; gap:.42rem !important; }
+      .st-key-PICKER [data-testid="stColumn"] { flex:1 1 0 !important; min-width:0 !important; width:0 !important; }
+    }
+    </style>
+    """
+    css = css.replace("PICKER", f"{key}_picker")
+    card_styles = []
+    cards = []
+    for option in options:
+        label, path = AVATARS[option]
+        picture = avatars.thumbnail(path, 200)
+        card_key = f"{key}_card_{option}"
+        if option in unavailable:
+            cards.append((card_key, None, f'<div class="mm-avatar-taken" aria-label="{html.escape(label)} taken">'
+                         f'<img src="{picture}" alt="" /></div>'))
+            continue
+        selected = option == chosen
+        card_styles.append(f"""
+        .st-key-{card_key} div.stButton > button {{
+          aspect-ratio:1 / 1; background-image:url('{picture}'),radial-gradient(circle at 50% 30%, #4b2a86, #1d1438 75%) !important;
+          background-size:contain,cover !important; background-position:center !important; background-repeat:no-repeat !important;
+          border:2px solid {'#9be4ff' if selected else 'transparent'} !important; border-radius:14px !important;
+          box-shadow:{'0 0 16px rgba(155,228,255,.7)' if selected else 'none'} !important;
+          color:transparent !important; padding:0 !important; transition:transform .15s ease, box-shadow .15s ease !important;
+        }}
+        .st-key-{card_key} div.stButton > button:hover {{ transform:translateY(-3px); border-color:#b57bff !important;
+          box-shadow:0 0 16px rgba(181,123,255,.5) !important; }}
+        .st-key-{card_key} div.stButton > button p {{ color:transparent !important; }}
+        {' .st-key-' + card_key + ' div.stButton > button::after { content:"✓"; position:absolute; top:5px; right:9px; color:#9be4ff; font:bold 1.35rem Arial,sans-serif; text-shadow:0 0 6px #000; }' if selected else ''}
+        """)
+        cards.append((card_key, (label, option), None))
+
+    with st.container(key=f"{key}_picker"):
+        st.markdown("<div class='mm-avatar-picker'><div class='mm-label'>Choose your detective</div>" + css +
+                    "<style>" + "".join(card_styles) + "</style></div>", unsafe_allow_html=True)
+        for row_start in range(0, len(cards), 4):
+            for column, (card_key, button, taken_html) in zip(st.columns(4), cards[row_start:row_start + 4]):
+                with column:
+                    with st.container(key=card_key):
+                        if taken_html:
+                            st.markdown(taken_html, unsafe_allow_html=True)
+                        else:
+                            label, option = button
+                            if st.button(label, key=f"{key}_choose_{option}", width="stretch"):
+                                st.session_state[choice_key] = option
+                                st.rerun()
     return st.session_state[choice_key]
 
 

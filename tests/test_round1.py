@@ -1,6 +1,6 @@
 """Tests for round1.py: every duel plays all four games one after another, each
-with its own 60-second timer; more right answers wins, then faster total time,
-then a tie-breaker; results come as soon as everyone is done.
+with its own short timer (see r1.GAME_TIMES); more right answers wins, then faster
+total time, then a tie-breaker; results come as soon as everyone is done.
 
 Times are made up (T0 = when the host pressed Start), so the tests can jump ahead
 instead of waiting."""
@@ -37,7 +37,7 @@ def right_answer(tour, game):
 def wrong_answer(tour, game):
     p = r1.puzzle(tour, game)
     if game == "number_lock":
-        return "1234" if p["answer"] != "1234" else "5678"
+        return "123" if p["answer"] != "123" else "456"
     if game == "pattern":
         return next(k for k in p["options"] if k != p["answer"])
     if game == "escape_route":
@@ -74,6 +74,18 @@ def play_all(tour, pid, rights, think=THINK):
     return tour
 
 
+def play_together(tour, plans):
+    """Several players play at the same time, like real phones: plans is a list of
+    (pid, rights, think). Answers are given in time order, so nobody's clock runs
+    out just because the test played someone else first."""
+    todo = {pid: (list(rights), think) for pid, rights, think in plans}
+    while any(rights for rights, _ in todo.values()):
+        pid = min((p for p in todo if todo[p][0]), key=lambda p: started_at(tour, p) + todo[p][1])
+        rights, think = todo[pid]
+        tour = play_one(tour, pid, rights.pop(0), think)
+    return tour
+
+
 def assert_refused(tour, result):
     after, message = result
     assert after == tour and message
@@ -103,7 +115,7 @@ def test_number_lock_answer_is_the_only_code_that_fits_the_clues(lock):
         right_place = sum(g == c for g, c in zip(guess, code))
         return right_place, len(set(guess) & set(code)) - right_place
 
-    codes = ["".join(p) for p in permutations("0123456789", 4)]      # 4 different digits
+    codes = ["".join(p) for p in permutations("0123456789", 3)]      # 3 different digits
     fits = [c for c in codes if all(feedback(g, c) == f for g, f in lock["feedback"].items())]
     assert fits == [lock["answer"]]
 
@@ -116,9 +128,9 @@ def test_every_lock_clue_has_a_sentence():
 
 def test_number_lock_checks():
     lock = LOCKS[0]
-    assert r1.check("number_lock", " 6205 ", lock) == "right"
-    assert r1.check("number_lock", "6250", lock) == "wrong"
-    for bad in ["620", "62055", "62a5", "6605", "", None]:
+    assert r1.check("number_lock", " 714 ", lock) == "right"
+    assert r1.check("number_lock", "741", lock) == "wrong"
+    for bad in ["71", "7140", "7a4", "774", "", None]:
         assert r1.check("number_lock", bad, lock) == "invalid"
 
 
@@ -153,16 +165,23 @@ def test_pattern_checks():
 @pytest.mark.parametrize("house", MAPS)
 def test_escape_route_has_exactly_one_safe_path(house):
     hidden = house["hidden"]
-    forbidden = hidden["food"] | hidden["ticks"] | hidden["guard"]
+    forbidden = hidden["food"] | hidden["ticks"] | hidden["guard"]     # the three house rules
 
     def safe(route):
-        fires = [i for i, room in enumerate(route) if room in hidden["fireplace"]]
-        return (route[-1] == "Exit" and not forbidden & set(route)
-                and len(fires) == 1 and len(route) - 1 - fires[0] == 3)
+        return route[-1] == "Exit" and not forbidden & set(route)
 
     routes = list(all_routes(house["map"]))
-    assert len(routes) >= 15
+    assert len(routes) >= 7                       # enough wrong turns to make you think
     assert [r for r in routes if safe(r)] == [house["answer"]]
+
+
+@pytest.mark.parametrize("house", MAPS)
+def test_escape_route_is_short(house):
+    assert len(house["answer"]) == 3              # exactly 3 doors, the Exit included
+
+
+def test_there_are_three_house_rules():
+    assert len(r1.ESCAPE_CLUES) == 3
 
 
 @pytest.mark.parametrize("house", MAPS)
@@ -175,14 +194,13 @@ def test_every_door_has_a_description_and_a_picture(house):
 
 def test_escape_route_checks():
     house = MAPS[0]
-    assert r1.check("escape_route", ["Hall", "Library", "Billiard Room", "Study", "Exit"], house) == "right"
-    for wrong in (["Kitchen", "Pantry"],
-                  ["Hall", "Library", "Chapel", "Study", "Exit"],           # the bell chimes
-                  ["Hall", "Gallery", "Study", "Exit"],                     # no fireplace
-                  ["Conservatory", "Library", "Billiard Room", "Study", "Exit"],   # breakfast
-                  ["Hall", "Library", "Billiard Room", "Storage Room"]):
+    assert r1.check("escape_route", ["Gallery", "Study", "Exit"], house) == "right"
+    for wrong in (["Kitchen", "Pantry"],                                    # soup
+                  ["Hall", "Library", "Exit"],                              # the clock ticks
+                  ["Gallery", "Music Room", "Exit"],                        # the guard
+                  ["Gallery", "Study", "Storage Room"]):                    # a dead end
         assert r1.check("escape_route", wrong, house) == "wrong"
-    for bad in (["Hall", "Exit"], ["Hall", "Library"], [], "Hall"):
+    for bad in (["Gallery", "Exit"], ["Gallery", "Study"], [], "Gallery"):
         assert r1.check("escape_route", bad, house) == "invalid"
 
 
@@ -237,8 +255,7 @@ def test_both_players_in_a_duel_answer_the_same_version():
     a, b = tour["duels"][0]
     for game in r1.GAMES:
         assert right_answer(tour, game) == right_answer(tour, game)     # one draw per tournament
-    tour = play_all(tour, a, [True] * 4)
-    tour = play_all(tour, b, [True] * 4)
+    tour = play_together(tour, [(a, [True] * 4, THINK), (b, [True] * 4, THINK)])
     assert r1.points(tour, a) == r1.points(tour, b) == 4
 
 
@@ -275,11 +292,21 @@ def test_order_of_games_is_random():
 
 # --- timing -----------------------------------------------------------------------
 
-def test_intro_then_the_first_game_with_its_own_60_seconds():
+def first_limit(tour, pid="p0"):
+    return r1.time_limit(r1.current_game(tour, pid))
+
+
+def test_every_game_has_its_own_short_timer():
+    assert r1.GAME_TIMES == {"pattern": 15, "memory": 25, "number_lock": 30, "escape_route": 30}
+    assert r1.MEMORY_SHOW_SECONDS == 5 and r1.TIEBREAK_SECONDS == 15
+    assert sum(r1.GAME_TIMES.values()) <= 100     # all four games together: under 2 minutes
+
+
+def test_intro_then_the_first_game_with_its_own_timer():
     tour = started()
     assert r1.phase(tour, "p0", T0) == "intro"
     assert r1.phase(tour, "p0", START) == "playing"
-    assert r1.seconds_left(tour, "p0", START) == r1.GAME_SECONDS
+    assert r1.seconds_left(tour, "p0", START) == first_limit(tour)
 
 
 def test_no_answers_during_the_intro():
@@ -292,21 +319,22 @@ def test_answering_starts_the_next_game_straight_away_with_a_fresh_timer():
     tour = play_one(started(), "p0", right=True, think=12)
     assert r1.game_number(tour, "p0") == 1
     assert started_at(tour, "p0") == START + 12
-    assert r1.seconds_left(tour, "p0", START + 12) == r1.GAME_SECONDS
+    assert r1.seconds_left(tour, "p0", START + 12) == first_limit(tour)
 
 
 def test_running_out_of_time_moves_on_to_the_next_game():
-    tour, _ = r1.settle(started(), START + r1.GAME_SECONDS)
+    limit = first_limit(started())
+    tour, _ = r1.settle(started(), START + limit)
     result = tour["round1"]["players"]["p0"]["results"][0]
-    assert result == {"correct": False, "seconds": r1.GAME_SECONDS, "timed_out": True}
+    assert result == {"correct": False, "seconds": limit, "timed_out": True}
     assert r1.game_number(tour, "p0") == 1
-    assert started_at(tour, "p0") == START + r1.GAME_SECONDS
+    assert started_at(tour, "p0") == START + limit
 
 
 def test_an_answer_for_a_game_that_already_ran_out_is_refused():
     tour = started()
     game = r1.current_game(tour, "p0")
-    assert_refused(tour, r1.answer(tour, "p0", 0, right_answer(tour, game), START + r1.GAME_SECONDS + 1))
+    assert_refused(tour, r1.answer(tour, "p0", 0, right_answer(tour, game), START + first_limit(tour) + 1))
 
 
 def test_memory_answer_refused_while_items_are_still_shown():
@@ -367,8 +395,8 @@ def first_duel(tour):
 def test_more_right_answers_wins():
     tour = started()
     a, b = first_duel(tour)
-    tour = play_all(tour, a, [True, True, False, False], think=8)
-    tour = play_all(tour, b, [True, True, True, False], think=20)       # slower, but more right
+    tour = play_together(tour, [(a, [True, True, False, False], 8),
+                                (b, [True, True, True, False], 13)])     # slower, but more right
     result = tour["round1"]["results"][0]
     assert result["winner"] == b and result["loser"] == a
     assert result["decided_by"] == "more right answers"
@@ -378,8 +406,7 @@ def test_more_right_answers_wins():
 def test_same_points_the_faster_total_time_wins():
     tour = started()
     a, b = first_duel(tour)
-    tour = play_all(tour, a, [True, False, True, False], think=12)
-    tour = play_all(tour, b, [False, True, False, True], think=9)
+    tour = play_together(tour, [(a, [True, False, True, False], 12), (b, [False, True, False, True], 9)])
     result = tour["round1"]["results"][0]
     assert result["winner"] == b and result["decided_by"] == "faster"
 
@@ -387,13 +414,12 @@ def test_same_points_the_faster_total_time_wins():
 def test_duel_waits_until_both_have_played_all_four():
     tour = started()
     a, b = first_duel(tour)
-    tour = play_all(tour, a, [True] * 4)
-    tour = play_all(tour, b, [True] * 3)
+    tour = play_together(tour, [(a, [True] * 4, THINK), (b, [True] * 3, THINK)])
     assert tour["round1"]["results"][0] is None
 
 
 def test_running_out_of_time_on_everything_ends_the_round():
-    tour, _ = r1.settle(started(), START + 4 * r1.GAME_SECONDS)
+    tour, _ = r1.settle(started(), START + sum(r1.GAME_TIMES.values()))
     assert all(r1.is_done(tour, pid) for pid in tour["round1"]["players"])
 
 
@@ -409,8 +435,7 @@ def test_settle_twice_changes_nothing_more():
 def nothing_right():
     tour = started()
     a, b = first_duel(tour)
-    tour = play_all(tour, a, [False] * 4)
-    tour = play_all(tour, b, [False] * 4)
+    tour = play_together(tour, [(a, [False] * 4, THINK), (b, [False] * 4, THINK)])
     return tour, a, b, started_at(tour, b)
 
 
@@ -464,7 +489,7 @@ def test_tie_breaker_nobody_answers_is_a_fair_draw():
 def test_no_tie_breaker_without_a_tie():
     tour = started()
     a, b = first_duel(tour)
-    tour = play_all(play_all(tour, a, [True] * 4), b, [False] * 4)
+    tour = play_together(tour, [(a, [True] * 4, THINK), (b, [False] * 4, THINK)])
     assert_refused(tour, r1.answer_tiebreak(tour, a, "45", started_at(tour, b)))
 
 
@@ -474,10 +499,10 @@ def everyone_done():
     """Every duel decided: the first player gets all four right, the second none... except
     one right, so no tie-breakers are needed."""
     tour = started()
+    plans = []
     for a, b in tour["duels"]:
-        tour = play_all(tour, a, [True] * 4)
-        tour = play_all(tour, b, [True, False, False, False])
-    return tour
+        plans += [(a, [True] * 4, THINK), (b, [True, False, False, False], THINK)]
+    return play_together(tour, plans)
 
 
 def test_results_come_as_soon_as_everyone_is_done_without_waiting_for_timers():
@@ -539,7 +564,7 @@ def test_the_opponent_of_a_player_who_left_can_still_finish_their_games():
 def test_host_can_end_the_round_now():
     tour = started()
     a, b = tour["duels"][0]
-    tour = play_all(play_all(tour, a, [True] * 4), b, [False] * 4)
+    tour = play_together(tour, [(a, [True] * 4, THINK), (b, [False] * 4, THINK)])
     tour, _ = r1.end_round_now(tour, "p0", START + 30, random.Random(1))
     assert all(r1.is_done(tour, pid) for pid in tour["round1"]["players"])
     assert tour["status"] == "round1_results"            # nobody waits for any timer
@@ -555,7 +580,7 @@ def test_only_the_host_can_end_the_round_and_not_during_the_intro():
 def test_ending_the_round_closes_open_tie_breakers_too():
     tour = started()
     a, b = tour["duels"][0]
-    tour = play_all(play_all(tour, a, [False] * 4), b, [False] * 4)
+    tour = play_together(tour, [(a, [False] * 4, THINK), (b, [False] * 4, THINK)])
     now = started_at(tour, b)
     tour, _ = r1.answer_tiebreak(tour, a, "45", now + 1)
     tour, _ = r1.end_round_now(tour, "p0", now + 2, random.Random(1))
@@ -566,9 +591,10 @@ def test_ending_the_round_closes_open_tie_breakers_too():
 
 def test_progress_moves_with_games_and_time_but_never_reaches_the_next_game_early():
     tour = started()
+    limit = first_limit(tour)
     assert r1.progress(tour, "p0", START) == 0
-    assert r1.progress(tour, "p0", START + 30) == 0.5
-    assert r1.progress(tour, "p0", START + 59) == 0.95
+    assert r1.progress(tour, "p0", START + limit / 2) == 0.5
+    assert r1.progress(tour, "p0", START + limit - 0.1) == 0.95
     tour = play_one(tour, "p0", right=False, think=10)
     assert r1.progress(tour, "p0", started_at(tour, "p0")) == 1
     tour = play_all(tour, "p0", [True] * 3)

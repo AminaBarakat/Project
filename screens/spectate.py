@@ -126,6 +126,19 @@ STYLE = f"""<style>
 .mm-crowd-left {{ background: linear-gradient(90deg, {art.PURPLE}, #c9a6ff); }}
 .mm-crowd-right {{ background: linear-gradient(90deg, #bdefff, {ICE}); }}
 .mm-crowd-none {{ flex: 1 1 auto; text-align: center; color: {art.SILVER}99; font-size: .78rem; font-style: italic; }}
+.mm-crowd-r2 {{ padding: .55rem clamp(.6rem,2.5vw,1.8rem) .65rem; border-radius: 18px; }}
+.mm-crowd-r2 .mm-crowd-title {{ font-size: clamp(.76rem,1.2vw,.9rem); margin-bottom: .3rem; }}
+.mm-crowd-r2-votes {{ max-width: 1000px; margin: .2rem auto 0; text-align: center;
+                      color: {art.SILVER}; font-size: .8rem; font-weight: 800; }}
+.mm-crowd-r2-vote-counts {{ display: flex; justify-content: space-between; margin-bottom: .25rem; }}
+.mm-crowd-r2-vote-track {{ display: flex; height: 12px; overflow: hidden; border-radius: 8px; background: #ffffff18; }}
+.mm-crowd-r2-vote-track div {{ min-width: 0; transition: width .8s ease; }}
+.mm-crowd-r2-vote-left {{ background: linear-gradient(90deg, {art.PURPLE}, #c9a6ff); }}
+.mm-crowd-r2-vote-right {{ background: linear-gradient(90deg, #bdefff, {ICE}); }}
+@media (max-width: 560px) {{
+  .mm-crowd-r2 {{ padding: .45rem .35rem .55rem; }}
+  .mm-crowd-r2-votes {{ font-size: .68rem; }}
+}}
 @media (max-width: 560px) {{ .mm-crowd-side {{ width: 70px; }} .mm-crowd-name {{ max-width: 70px; font-size: .62rem; }}
   .mm-rx-say {{ font-size: .8rem; }} .mm-rx-sticker img {{ width: 44px; height: 44px; }} .mm-rx-tag {{ font-size: .7rem; }} }}
 </style>"""
@@ -161,6 +174,25 @@ def _side(tour, pids):
     return f'<div class="mm-crowd-side"><div class="mm-crowd-faces">{faces}</div><div class="mm-crowd-name">{name}</div></div>'
 
 
+def _round2_crowd_bar(title, left, right, counts, total):
+    left_count, right_count = counts[left], counts[right]
+    if total:
+        share = round(100 * left_count / total)
+        votes = (
+            '<div class="mm-crowd-r2-votes"><div class="mm-crowd-r2-vote-counts">'
+            f'<span>Duo 1: {left_count} call{"s" if left_count != 1 else ""}</span>'
+            f'<span>Duo 2: {right_count} call{"s" if right_count != 1 else ""}</span></div>'
+            '<div class="mm-crowd-r2-vote-track">'
+            f'<div class="mm-crowd-r2-vote-left" style="width:{share}%"></div>'
+            f'<div class="mm-crowd-r2-vote-right" style="width:{100 - share}%"></div>'
+            '</div></div>'
+        )
+    else:
+        votes = '<div class="mm-crowd-r2-votes">No calls yet…</div>'
+    return (f'<div class="mm-crowd mm-crowd-r2"><div class="mm-crowd-title">{title}</div>'
+            f'{votes}</div>')
+
+
 def crowd_bar(tour, round_name):
     """Who the spectators back, live: the two choices with a split bar between them."""
     options = sp.call_options(tour, round_name) or sp._decided_options(tour, round_name)
@@ -170,6 +202,8 @@ def crowd_bar(tour, round_name):
     counts = sp.crowd(tour, round_name)
     total = counts[left] + counts[right]
     title = "THE CROWD'S CALL · WHICH DUO OPENS THE VAULT?" if round_name == "round2" else "THE CROWD'S CALL · WHO WINS THE CASE?"
+    if round_name == "round2":
+        return _round2_crowd_bar(title, left, right, counts, total)
     if total == 0:
         middle = '<div class="mm-crowd-none">No calls yet…</div>'
     else:
@@ -182,8 +216,14 @@ def crowd_bar(tour, round_name):
 
 def _moment(tour):
     """What the main page was drawn for: if this changes, the page must be redrawn
-    (e.g. calls just opened or closed)."""
-    return (tour.get("status"), sp.open_call(tour))
+    (e.g. calls just opened or closed, or the Round 2 intro ends)."""
+    round2_state = tour.get("round2") or {}
+    intro_ends_at = round2_state.get("intro_ends_at")
+    intro_active = (
+        tour.get("status") == "round2"
+        and (intro_ends_at is None or time.time() < intro_ends_at)
+    )
+    return (tour.get("status"), sp.open_call(tour), intro_active)
 
 
 @st.fragment(run_every="2s")
