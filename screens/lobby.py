@@ -266,14 +266,11 @@ def _code_and_link(code, tour, me):
                 st.markdown("<div class='mm-invite'>INVITE LINK · TAP ⧉ TO COPY</div>", unsafe_allow_html=True)
                 st.code(link, language=None)
     st.caption("Share the code or this link, not your own page address: your address is your seat in the game.")
-    if rules.is_host(tour, me):
-        _qr_invite(code)
+    _qr_invite(code)
 
 
 def _qr_invite(code):
-    """The host can show a QR code: people scan it with their phone camera and land
-    on the join page with the code already filled in (handy in a room, e.g. to
-    invite someone to a demo game without sending them a link)."""
+    """Any seated detective can show the join QR code to invite another player."""
     link = common.join_link(code)
     if not link:
         return

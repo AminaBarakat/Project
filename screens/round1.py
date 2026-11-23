@@ -224,11 +224,12 @@ def _grid(name, count):
         return st.columns(count)
 
 
-def _picture_button(key, svg, label, height=120, selected=False, bob=False, appear=None):
+def _picture_button(key, svg, label, height=120, selected=False, bob=False, appear=None,
+                    on_click=None, args=None):
     """A drawing you tap directly. Returns True when tapped."""
     key = art.css_key(key)        # e.g. "Clock Room" → "Clock_Room", safe as a CSS class
     _html(art.picture_button_style(key, svg, height, selected, bob, appear))
-    return st.button(label, key=key, width="stretch")
+    return st.button(label, key=key, width="stretch", on_click=on_click, args=args)
 
 
 # --- intro ------------------------------------------------------------------------
@@ -389,21 +390,32 @@ def _memory(tour, code, me, number, now, puzzle):
     for k, name in enumerate(puzzle["options"]):       # 3 vanished, 3 still here, 4 never shown
         with rows[k // 5][k % 5]:
             chosen = name in picked
-            if _picture_button(f"memory_{number}_{k}", art.item(name),
-                               f"✓ {name}" if chosen else name, height=110, selected=chosen):
-                if chosen:
-                    picked.remove(name)
-                elif len(picked) < need:
-                    picked.append(name)
-                if len(picked) == need:
-                    st.session_state[ready_key] = time.time()
-                else:
-                    st.session_state.pop(ready_key, None)
-                # The following tap will render the updated selection. Avoid an
-                # immediate second rerun, which used to pause between picks.
+            _picture_button(f"memory_{number}_{k}", art.item(name),
+                            f"✓ {name}" if chosen else name, height=110, selected=chosen,
+                            on_click=_toggle_memory_choice,
+                            args=(picked_key, ready_key, name, need))
     if st.button("Lock in", type="primary", width="stretch", disabled=len(picked) != need,
                  key=f"memory_lock_{number}"):
         _submit(code, me, number, list(picked))
+
+
+def _toggle_memory_choice(picked_key, ready_key, name, need):
+    """Update Memory choices before Streamlit renders the button again.
+
+    A callback runs before the normal rerun. This makes the Lock in button see
+    all three choices on the same redraw instead of staying disabled after the
+    third card visibly gained a tick.
+    """
+    picked = list(st.session_state.get(picked_key, []))
+    if name in picked:
+        picked.remove(name)
+    elif len(picked) < need:
+        picked.append(name)
+    st.session_state[picked_key] = picked
+    if len(picked) == need:
+        st.session_state[ready_key] = time.time()
+    else:
+        st.session_state.pop(ready_key, None)
 
 
 # --- tie-breaker -----------------------------------------------------------------
